@@ -2,10 +2,6 @@
 
 Create a PDF file (a "picturebook") from a folder containing images, with support for images exported from Flickr.
 
-## Important
-
-Work in progress. Documentation to follow.
-
 ## Tools
 
 To build binary versions of these tools run the `cli` Makefile target. For example:
