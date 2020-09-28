@@ -85,6 +85,36 @@ total 160
 -rw-r--r--  1 user  staff  42735 May 11  2012 7168662172_b8018fcd92_z.jpg
 ```
 
+## Handlers
+
+The `picturebook` application supports a number of "handlers" for customizing which images are included, how and whether they are transformed before inclusion and how to derive that image's caption.
+
+In addition to the default `picturebook` handlers this package exports the following:
+
+### Captions
+
+```
+type Caption interface {
+	Text(context.Context, string) (string, error)
+}
+```
+
+#### flickr://
+
+This handler will derive the title for a Flickr photo using data stored in a `{PHOTO_ID}_{SECRET}_i.json` file, alongside an image. The data in the file is expected to be the out of a call to the [flickr.photos.getInfo](https://www.flickr.com/services/api/flickr.photos.getInfo.html) API method.
+
+### Filters
+
+```
+type Filter interface {
+	Continue(context.Context, string) (bool, error)
+}
+```
+
+#### flickr://
+
+This handler will ensure that only images whose filename matches `o_\..*$` are included.
+
 ## See also
 
 * https://github.com/aaronland/go-picturebook
