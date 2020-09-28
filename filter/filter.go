@@ -7,5 +7,5 @@ import (
 var flickr_re *regexp.Regexp
 
 func init() {
-	flickr_re = regexp.MustCompile(`_o\.\.*$`)
+	flickr_re = regexp.MustCompile(`\d+_[a-z0-9]+_o\..*$`)
 }

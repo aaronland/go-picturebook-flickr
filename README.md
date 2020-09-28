@@ -24,7 +24,7 @@ Create a PDF file (a "picturebook") from a folder containing images, with suppor
   -border float
     	The size of the border around images. (default 0.01)
   -caption string
-    	A valid caption.Caption URI. Valid schemes are: cooperhewitt, filename, flickr, none, orthis
+    	A valid caption.Caption URI. Valid schemes are: filename, flickr, none, orthis
   -debug
     	DEPRECATED: Please use the -verbose flag instead.
   -dpi float
@@ -36,7 +36,7 @@ Create a PDF file (a "picturebook") from a folder containing images, with suppor
   -fill-page
     	If necessary rotate image 90 degrees to use the most available page space.
   -filter value
-    	A valid filter.Filter URI. Valid schemes are: any, cooperhewitt, flickr, orthis, regexp
+    	A valid filter.Filter URI. Valid schemes are: any, flickr, orthis, regexp
   -height float
     	A custom width to use as the size of your picturebook. Units are currently defined in inches. This fs.overrides the -size fs. (default 11)
   -include value
