@@ -11,7 +11,7 @@ import (
 func init() {
 
 	ctx := context.Background()
-	err := pb_filter.RegisterFilter(ctx, "flickrx", NewFlickrFilter)
+	err := pb_filter.RegisterFilter(ctx, "flickr", NewFlickrFilter)
 
 	if err != nil {
 		panic(err)

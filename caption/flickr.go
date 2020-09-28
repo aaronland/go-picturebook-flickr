@@ -18,7 +18,7 @@ import (
 func init() {
 
 	ctx := context.Background()
-	err := pb_caption.RegisterCaption(ctx, "flickrx", NewFlickrCaption)
+	err := pb_caption.RegisterCaption(ctx, "flickr", NewFlickrCaption)
 
 	if err != nil {
 		panic(err)
