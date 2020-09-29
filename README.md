@@ -91,7 +91,7 @@ In addition to the default `picturebook` handlers this package exports the follo
 
 ```
 type Caption interface {
-	Text(context.Context, string) (string, error)
+	Text(context.Context, *blob.Bucket, string) (string, error)
 }
 ```
 
@@ -103,7 +103,7 @@ This handler will derive the title for a Flickr photo using data stored in a `{P
 
 ```
 type Filter interface {
-	Continue(context.Context, string) (bool, error)
+	Continue(context.Context, *blob.Bucket, string) (bool, error)
 }
 ```
 
