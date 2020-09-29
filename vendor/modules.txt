@@ -10,7 +10,7 @@ github.com/aaronland/go-image-tools/imaging
 github.com/aaronland/go-image-tools/util
 # github.com/aaronland/go-image-transform v0.0.0-20200216021135-f5c5cf8fc134
 github.com/aaronland/go-image-transform
-# github.com/aaronland/go-picturebook v0.4.0
+# github.com/aaronland/go-picturebook v0.4.1
 github.com/aaronland/go-picturebook
 github.com/aaronland/go-picturebook/application
 github.com/aaronland/go-picturebook/application/commandline
