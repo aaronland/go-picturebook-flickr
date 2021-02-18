@@ -30,12 +30,23 @@ var height float64
 var dpi float64
 var border float64
 
+var margin float64
+var margin_top float64
+var margin_bottom float64
+var margin_left float64
+var margin_right float64
+
+var bleed float64
+
 var source_uri string
 var target_uri string
 
 var fill_page bool
 
 var filename string
+
+var even_only bool
+var odd_only bool
 
 var verbose bool
 var debug bool
@@ -86,11 +97,19 @@ func DefaultFlagSet(ctx context.Context) (*flag.FlagSet, error) {
 	desc_sorters := fmt.Sprintf("A valid sort.Sorter URI. Valid schemes are: %s", available_sorters)
 
 	fs.StringVar(&orientation, "orientation", "P", "The orientation of your picturebook. Valid orientations are: 'P' and 'L' for portrait and landscape mode respectively.")
-	fs.StringVar(&size, "size", "letter", "A common paper size to use for the size of your picturebook. Valid sizes are: [please write me]")
-	fs.Float64Var(&width, "width", 8.5, "A custom height to use as the size of your picturebook. Units are currently defined in inches. This fs.overrides the -size fs.")
-	fs.Float64Var(&height, "height", 11, "A custom width to use as the size of your picturebook. Units are currently defined in inches. This fs.overrides the -size fs.")
+	fs.StringVar(&size, "size", "letter", `A common paper size to use for the size of your picturebook. Valid sizes are: "A3", "A4", "A5", "Letter", "Legal", or "Tabloid".`)
+	fs.Float64Var(&width, "width", 0.0, "A custom height to use as the size of your picturebook. Units are currently defined in inches. This flag overrides the -size flag when used in combination with the -height flag.")
+	fs.Float64Var(&height, "height", 0.0, "A custom width to use as the size of your picturebook. Units are currently defined in inches. This flag overrides the -size flag when used in combination with the -width flag.")
 	fs.Float64Var(&dpi, "dpi", 150, "The DPI (dots per inch) resolution for your picturebook.")
 	fs.Float64Var(&border, "border", 0.01, "The size of the border around images.")
+
+	fs.Float64Var(&margin_top, "margin-top", 1.0, "The margin around the top of each page.")
+	fs.Float64Var(&margin_bottom, "margin-bottom", 1.0, "The margin around the bottom of each page.")
+	fs.Float64Var(&margin_left, "margin-left", 1.0, "The margin around the left-hand side of each page.")
+	fs.Float64Var(&margin_right, "margin-right", 1.0, "The margin around the right-hand side of each page.")
+	fs.Float64Var(&margin, "margin", 0.0, "The margin around all sides of a page. If non-zero this value will be used to populate all the other -margin-(N) flags.")
+
+	fs.Float64Var(&bleed, "bleed", 0.0, "An additional bleed area to add (on all four sides) to the size of your picturebook.")
 
 	fs.BoolVar(&fill_page, "fill-page", false, "If necessary rotate image 90 degrees to use the most available page space.")
 
@@ -98,6 +117,9 @@ func DefaultFlagSet(ctx context.Context) (*flag.FlagSet, error) {
 
 	fs.BoolVar(&verbose, "verbose", false, "Display verbose output as the picturebook is created.")
 	fs.BoolVar(&debug, "debug", false, "DEPRECATED: Please use the -verbose flag instead.")
+
+	fs.BoolVar(&even_only, "even-only", false, "Only include images on even-numbered pages.")
+	fs.BoolVar(&odd_only, "odd-only", false, "Only include images on odd-numbered pages.")
 
 	fs.StringVar(&caption_uri, "caption", "", desc_captions)
 	fs.StringVar(&sort_uri, "sort", "", desc_sorters)
@@ -212,6 +234,13 @@ func (app *CommandLineApplication) Run(ctx context.Context) error {
 		}
 	}
 
+	if margin != 0.0 {
+		margin_top = margin
+		margin_bottom = margin
+		margin_left = margin
+		margin_right = margin
+	}
+
 	source_bucket, err := blob.OpenBucket(ctx, source_uri)
 
 	if err != nil {
@@ -237,9 +266,16 @@ func (app *CommandLineApplication) Run(ctx context.Context) error {
 	opts.Height = height
 	opts.DPI = dpi
 	opts.Border = border
+	opts.Bleed = bleed
+	opts.MarginTop = margin_top
+	opts.MarginBottom = margin_bottom
+	opts.MarginLeft = margin_left
+	opts.MarginRight = margin_right
 	opts.FillPage = fill_page
 	opts.Verbose = verbose
 	opts.OCRAFont = ocra_font
+	opts.EvenOnly = even_only
+	opts.OddOnly = odd_only
 
 	processed := make([]string, 0)
 

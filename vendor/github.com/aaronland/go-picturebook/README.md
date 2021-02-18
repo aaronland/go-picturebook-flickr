@@ -16,15 +16,19 @@ go build -mod vendor -o bin/picturebook cmd/picturebook/main.go
 Create a PDF file (a "picturebook") from a folder (containing images).
 
 ```
-> ./bin/picturebook -h
+$> ./bin/picturebook -h
+  -bleed float
+    	An additional bleed area to add (on all four sides) to the size of your picturebook.
   -border float
     	The size of the border around images. (default 0.01)
   -caption string
-    	A valid caption.Caption URI. Valid schemes are: filename, none
+    	A valid caption.Caption URI. Valid schemes are: exif, filename, none
   -debug
     	DEPRECATED: Please use the -verbose flag instead.
   -dpi float
     	The DPI (dots per inch) resolution for your picturebook. (default 150)
+  -even-only
+    	Only include images on even-numbered pages.
   -exclude value
     	A valid regular expression to use for testing whether a file should be excluded from your picturebook. DEPRECATED: Please use -filter regexp://exclude/?pattern={REGULAR_EXPRESSION} flag instead.
   -filename string
@@ -34,11 +38,23 @@ Create a PDF file (a "picturebook") from a folder (containing images).
   -filter value
     	A valid filter.Filter URI. Valid schemes are: any, regexp
   -height float
-    	A custom width to use as the size of your picturebook. Units are currently defined in inches. This fs.overrides the -size fs. (default 11)
+    	A custom width to use as the size of your picturebook. Units are currently defined in inches. This flag overrides the -size flag when used in combination with the -width flag.
   -include value
     	A valid regular expression to use for testing whether a file should be included in your picturebook. DEPRECATED: Please use -filter regexp://include/?pattern={REGULAR_EXPRESSION} flag instead.
+  -margin float
+    	The margin around all sides of a page. If non-zero this value will be used to populate all the other -margin-(N) flags.
+  -margin-bottom float
+    	The margin around the bottom of each page. (default 1)
+  -margin-left float
+    	The margin around the left-hand side of each page. (default 1)
+  -margin-right float
+    	The margin around the right-hand side of each page. (default 1)
+  -margin-top float
+    	The margin around the top of each page. (default 1)
   -ocra-font
     	Use an OCR-compatible font for captions.
+  -odd-only
+    	Only include images on odd-numbered pages.
   -orientation string
     	The orientation of your picturebook. Valid orientations are: 'P' and 'L' for portrait and landscape mode respectively. (default "P")
   -pre-process value
@@ -46,9 +62,9 @@ Create a PDF file (a "picturebook") from a folder (containing images).
   -process value
     	A valid process.Process URI. Valid schemes are: halftone, null, rotate
   -size string
-    	A common paper size to use for the size of your picturebook. Valid sizes are: [please write me] (default "letter")
+    	A common paper size to use for the size of your picturebook. Valid sizes are: "A3", "A4", "A5", "Letter", "Legal", or "Tabloid". (default "letter")
   -sort string
-    	A valid sort.Sorter URI. Valid schemes are: modtime
+    	A valid sort.Sorter URI. Valid schemes are: exif, modtime
   -source-uri string
     	A valid GoCloud blob URI to specify where files should be read from. By default file:// URIs are supported.
   -target string
@@ -58,7 +74,7 @@ Create a PDF file (a "picturebook") from a folder (containing images).
   -verbose
     	Display verbose output as the picturebook is created.
   -width float
-    	A custom height to use as the size of your picturebook. Units are currently defined in inches. This fs.overrides the -size fs. (default 8.5)
+    	A custom height to use as the size of your picturebook. Units are currently defined in inches. This flag overrides the -size flag when used in combination with the -height flag.
 ```
 
 For example:
@@ -117,13 +133,25 @@ The `picturebook` application supports a number of "handlers" for customizing wh
 
 ```
 type Caption interface {
-	Text(context.Context, string) (string, error)
+	Text(context.Context, *blob.Bucket, string) (string, error)
 }
 ```
 
 For an example of how to create and register a custom `Caption` handler take a look at the code in [caption/filename.go](caption/filename.go).
 
 The following schemes for caption handlers are supported by default:
+
+#### exif://?property={PROPERTY}
+
+The handler will eventually return the value of a given EXIF property. As of this writing it will only return the value of the EXIF `DateTime` property.
+
+If EXIF data is not present or can be loaded the handler will return an empty string.
+
+Parameters
+
+| Name | Value | Required |
+| --- | --- | --- |
+| property | "datetime" | yes |
 
 #### filename://
 
@@ -137,7 +165,7 @@ The handler will return an empty string for all images.
 
 ```
 type Filter interface {
-	Continue(context.Context, string) (bool, error)
+	Continue(context.Context, *blob.Bucket, string) (bool, error)
 }
 ```
 
@@ -173,7 +201,7 @@ Parameters
 
 ```
 type Process interface {
-	Transform(context.Context, string) (string, error)
+	Transform(context.Context, *blob.Bucket, string) (string, error)
 }
 ```
 
@@ -197,13 +225,17 @@ This handler will attempt to auto-rotate an image, based on any available EXIF `
 
 ```
 type Sorter interface {
-	Sort(context.Context, []*picture.PictureBookPicture) ([]*picture.PictureBookPicture, error)
+	Sort(context.Context, *blob.Bucket, []*picture.PictureBookPicture) ([]*picture.PictureBookPicture, error)
 }
 ```
 
 For an example of how to create and register a custom `Sorter` handler take a look at the code in [sort/orthis.go](sort/orthis.go).
 
 The following schemes for sorter handlers are supported by default:
+
+#### exif://
+
+Sort images, in ascending order, by their EXIF `DateTime` property. If EXIF data is not present or can not be loaded the image's modification time will be used. If two or more images have the same modification they will sorted again by their file size.
 
 #### modtime://
 
@@ -216,3 +248,4 @@ Sort images, in ascending order, by their modification times. If two or more ima
 * https://github.com/jung-kurt/gofpdf
 * https://github.com/aaronland/go-image-tools
 * https://github.com/aaronland/go-image-halftone
+* https://gocloud.dev/howto/blob/
