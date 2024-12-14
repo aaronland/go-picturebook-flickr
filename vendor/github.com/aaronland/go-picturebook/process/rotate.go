@@ -1,20 +1,16 @@
 package process
 
-// update to use go-image-rotate
-
 import (
-	"bytes"
 	"context"
-	"github.com/aaronland/go-image-tools/util"
-	"github.com/aaronland/go-picturebook/tempfile"
-	"github.com/microcosm-cc/exifutil"
-	"github.com/rwcarlsen/goexif/exif"
-	"gocloud.dev/blob"
-	"io/ioutil"
-	_ "log"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"strings"
+
+	"github.com/aaronland/go-image/decode"
+	"github.com/aaronland/go-image/rotate"
+	"github.com/aaronland/go-picturebook/tempfile"
+	"gocloud.dev/blob"
 )
 
 func init() {
@@ -27,16 +23,18 @@ func init() {
 	}
 }
 
+// type RotateProcess implements the `Process` interface and rotates and image based on its EXIF `Orientation` property.
 type RotateProcess struct {
 	Process
 }
 
+// NewRotateProcess returns a new instance of `RotateProcess` for 'uri' which must be parsable as a valid `net/url` URL instance.
 func NewRotateProcess(ctx context.Context, uri string) (Process, error) {
 
 	_, err := url.Parse(uri)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to parse URI for NewRotateProcess, %w", err)
 	}
 
 	f := &RotateProcess{}
@@ -44,7 +42,9 @@ func NewRotateProcess(ctx context.Context, uri string) (Process, error) {
 	return f, nil
 }
 
-func (f *RotateProcess) Transform(ctx context.Context, bucket *blob.Bucket, path string) (string, error) {
+// Tranform rotates the image 'path' in 'source_bucket' and writes the results to 'target_bucket' returning
+// a new relative path on success. If an image is not a JPEG file the method return an empty string.
+func (f *RotateProcess) Transform(ctx context.Context, source_bucket *blob.Bucket, target_bucket *blob.Bucket, path string) (string, error) {
 
 	ext := filepath.Ext(path)
 	ext = strings.ToLower(ext)
@@ -53,66 +53,49 @@ func (f *RotateProcess) Transform(ctx context.Context, bucket *blob.Bucket, path
 		return "", nil
 	}
 
-	fh, err := bucket.NewReader(ctx, path, nil)
+	r, err := source_bucket.NewReader(ctx, path, nil)
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Failed to create new reader for %s, %w", path, err)
 	}
 
-	defer fh.Close()
+	defer r.Close()
 
-	body, err := ioutil.ReadAll(fh)
+	o, err := rotate.GetImageOrientation(ctx, r)
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Failed to derive orientation for %s, %w", path, err)
 	}
 
-	br := bytes.NewReader(body)
-
-	x, err := exif.Decode(br)
+	_, err = r.Seek(0, 0)
 
 	if err != nil {
-
-		if exif.IsExifError(err) {
-			return "", nil
-		}
-
-		if exif.IsCriticalError(err) {
-			return "", nil
-		}
-
-		return "", err
+		return "", fmt.Errorf("Failed to rewind %s, %w", path, err)
 	}
 
-	tag, err := x.Get(exif.Orientation)
+	dec, err := decode.NewDecoder(ctx, path)
 
 	if err != nil {
-		return "", nil
+		return "", fmt.Errorf("Failed to create new decoder, %w", err)
 	}
 
-	// log.Println(path, tag)
-
-	orientation, err := tag.Int64(0)
+	im, _, err := dec.Decode(ctx, r)
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Failed to decode image for %s, %w", path, err)
 	}
 
-	if orientation == 1 {
-		return "", nil
-	}
-
-	br.Seek(0, 0)
-
-	im, _, err := util.DecodeImageFromReader(br)
+	rotated, err := rotate.RotateImageWithOrientation(ctx, im, o)
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Failed to rotate %s, %w", path, err)
 	}
 
-	angle, _, _ := exifutil.ProcessOrientation(orientation)
-	rotated := exifutil.Rotate(im, angle)
+	tmpfile, _, err := tempfile.TempFileWithImage(ctx, target_bucket, rotated)
 
-	tmpfile, _, err := tempfile.TempFileWithImage(ctx, bucket, rotated)
-	return tmpfile, err
+	if err != nil {
+		return "", fmt.Errorf("Failed to write temp file (rotate) for %s, %w", path, err)
+	}
+
+	return tmpfile, nil
 }

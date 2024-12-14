@@ -3,13 +3,14 @@ package sort
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"net/url"
+	"sort"
+
 	"github.com/aaronland/go-picturebook/picture"
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/mknote"
 	"gocloud.dev/blob"
-	"log"
-	"net/url"
-	"sort"
 )
 
 func init() {
@@ -24,22 +25,26 @@ func init() {
 	exif.RegisterParsers(mknote.All...)
 }
 
+// type ExifSorter implements the `Sorter` interface to sort a list of `picture.PictureBookPicture` by their EXIF DateTime properties.
 type ExifSorter struct {
 	Sorter
 }
 
+// NewExifSorter returns a new instance of `ExifSorter` for 'uri' which must be parsable as a valid `net/url` URL instance.
 func NewExifSorter(ctx context.Context, uri string) (Sorter, error) {
 
 	_, err := url.Parse(uri)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to parse URI for NewExifSorter, %w", err)
 	}
 
 	s := &ExifSorter{}
 	return s, nil
 }
 
+// Sort sorts a list of `picture.PictureBookPicture` by their EXIF DateTime properties. If an image does not have an EXIF DateTime property it is
+// excluded from the sorted result set.
 func (f *ExifSorter) Sort(ctx context.Context, bucket *blob.Bucket, pictures []*picture.PictureBookPicture) ([]*picture.PictureBookPicture, error) {
 
 	lookup := make(map[string]*picture.PictureBookPicture)
@@ -52,7 +57,7 @@ func (f *ExifSorter) Sort(ctx context.Context, bucket *blob.Bucket, pictures []*
 		fh, err := bucket.NewReader(ctx, path, nil)
 
 		if err != nil {
-			log.Println(path, err)
+			slog.Warn("Failed to open image for exif sorting", "path", path, "error", err)
 			continue
 		}
 
@@ -72,6 +77,8 @@ func (f *ExifSorter) Sort(ctx context.Context, bucket *blob.Bucket, pictures []*
 			if err == nil {
 				ts = dt.Unix()
 			}
+		} else {
+			slog.Warn("Failed to decode EXIF data", "path", path, "error", err)
 		}
 
 		key := fmt.Sprintf("%d-%d", ts, sz)

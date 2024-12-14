@@ -2,6 +2,10 @@
 
 Create a PDF file (a "picturebook") from a folder (containing images).
 
+## Documentation
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/aaronland/go-picturebook.svg)](https://pkg.go.dev/github.com/aaronland/go-picturebook)
+
 ## Tools
 
 To build binary versions of these tools run the `cli` Makefile target. For example:
@@ -21,26 +25,20 @@ $> ./bin/picturebook -h
     	An additional bleed area to add (on all four sides) to the size of your picturebook.
   -border float
     	The size of the border around images. (default 0.01)
-  -caption string
-    	A valid caption.Caption URI. Valid schemes are: exif, filename, none
-  -debug
-    	DEPRECATED: Please use the -verbose flag instead.
+  -caption value
+    	Zero or more valid caption.Caption URIs. Valid schemes are: exif://, filename://, json://, modtime://, multi://, none://.
   -dpi float
     	The DPI (dots per inch) resolution for your picturebook. (default 150)
   -even-only
     	Only include images on even-numbered pages.
-  -exclude value
-    	A valid regular expression to use for testing whether a file should be excluded from your picturebook. DEPRECATED: Please use -filter regexp://exclude/?pattern={REGULAR_EXPRESSION} flag instead.
   -filename string
     	The filename (path) for your picturebook. (default "picturebook.pdf")
   -fill-page
-    	If necessary rotate image 90 degrees to use the most available page space.
+    	If necessary rotate image 90 degrees to use the most available page space. Note that any '-process' flags involving colour space manipulation will automatically be applied to images after they have been rotated.
   -filter value
-    	A valid filter.Filter URI. Valid schemes are: any, regexp
+    	A valid filter.Filter URI. Valid schemes are: any://, regexp://.
   -height float
-    	A custom width to use as the size of your picturebook. Units are currently defined in inches. This flag overrides the -size flag when used in combination with the -width flag.
-  -include value
-    	A valid regular expression to use for testing whether a file should be included in your picturebook. DEPRECATED: Please use -filter regexp://include/?pattern={REGULAR_EXPRESSION} flag instead.
+    	A custom width to use as the size of your picturebook. Units are defined in inches by default. This flag overrides the -size flag when used in combination with the -width flag.
   -margin float
     	The margin around all sides of a page. If non-zero this value will be used to populate all the other -margin-(N) flags.
   -margin-bottom float
@@ -51,30 +49,34 @@ $> ./bin/picturebook -h
     	The margin around the right-hand side of each page. (default 1)
   -margin-top float
     	The margin around the top of each page. (default 1)
+  -max-pages int
+    	An optional value to indicate that a picturebook should not exceed this number of pages
   -ocra-font
     	Use an OCR-compatible font for captions.
   -odd-only
     	Only include images on odd-numbered pages.
   -orientation string
     	The orientation of your picturebook. Valid orientations are: 'P' and 'L' for portrait and landscape mode respectively. (default "P")
-  -pre-process value
-    	DEPRECATED: Please use -process {PROCESS_NAME}:// flag instead.
   -process value
-    	A valid process.Process URI. Valid schemes are: halftone, null, rotate
+    	A valid process.Process URI. Valid schemes are: colorspace://, colourspace://, contour://, halftone://, null://, rotate://.
   -size string
-    	A common paper size to use for the size of your picturebook. Valid sizes are: "A3", "A4", "A5", "Letter", "Legal", or "Tabloid". (default "letter")
+    	A common paper size to use for the size of your picturebook. Valid sizes are: "a3", "a4", "a5", "letter", "legal", or "tabloid". (default "letter")
   -sort string
-    	A valid sort.Sorter URI. Valid schemes are: exif, modtime
+    	A valid sort.Sorter URI. Valid schemes are: exif://, modtime://.
   -source-uri string
-    	A valid GoCloud blob URI to specify where files should be read from. By default file:// URIs are supported.
-  -target string
-    	Valid targets are: cooperhewitt; flickr; orthis. If defined this flag will set the -filter and -caption flags accordingly. DEPRECATED: Please use specific -filter and -caption flags as needed.
+    	A valid GoCloud blob URI to specify where files should be read from. Available schemes are: file://. If no URI scheme is included then the file:// scheme is assumed.
   -target-uri string
-    	A valid GoCloud blob URI to specify where your final picturebook PDF file should be written to. By default file:// URIs are supported.
+    	A valid GoCloud blob URI to specify where files should be read from. Available schemes are: file://. If no URI scheme is included then the file:// scheme is assumed. If empty then the code will try to use the operating system's 'current working directory' where applicable.
+  -text string
+    	A valid text.Text URI. Valid schemes are: json://.
+  -tmpfile-uri string
+    	A valid GoCloud blob URI to specify where files should be read from. Available schemes are: file://. If no URI scheme is included then the file:// scheme is assumed. If empty the operating system's temporary directory will be used.
+  -units string
+    	The unit of measurement to apply to the -height and -width flags. Valid options are inches, millimeters, centimeters (default "inches")
   -verbose
     	Display verbose output as the picturebook is created.
   -width float
-    	A custom height to use as the size of your picturebook. Units are currently defined in inches. This flag overrides the -size flag when used in combination with the -height flag.
+    	A custom height to use as the size of your picturebook. Units are defined in inches by default. This flag overrides the -size flag when used in combination with the -height flag.
 ```
 
 For example:
@@ -157,6 +159,14 @@ Parameters
 
 This handler will return the filename for a given path of an image.
 
+#### json://{PATH/TO/CAPTIONS.json}
+
+This handler will assign captions derived from a JSON file that can be read from the local disk. The JSON file is expected to be a dictionary whose keys are the filenames of the images being included in the picturebook and whose values are a list of strings to use as caption text.
+
+#### modtime://
+
+This handler will assign captions derived from an image's modification time.
+
 #### none://
 
 The handler will return an empty string for all images.
@@ -209,6 +219,39 @@ For an example of how to create and register a custom `Process` handler take a l
 
 The following schemes for process handlers are supported by default:
 
+#### colourspace://
+
+This handler will map all the pixels in an image to a given colour space (Apple's Display P3, Adobe RGB) before including it in your picturebook. URIs should take the form of `colourspace://{{LABEL}.
+
+##### Labels
+
+| Name | Description |
+| --- | --- |
+| adobergb | Convert all pixels in to the Adobe RGB colour space |
+| displayp3 | Convert all pixels in to Apple's Display P3 colour space |
+
+#### colorspace://
+
+This handler will map all the pixels in an image to a given colour space (Apple's Display P3, Adobe RGB) before including it in your picturebook. URIs should take the form of `colorspace://{{LABEL}.
+
+##### Labels
+
+| Name | Description |
+| --- | --- |
+| adobergb | Convert all pixels in to the Adobe RGB colour space |
+| displayp3 | Convert all pixels in to Apple's Display P3 colour space |
+
+#### contour://
+
+This handler will convert an image into a series of black and white "contour" lines using the [fogleman/contourmap](https://github.com/fogleman/contourmap) package. URIs should take the form of `contour://?{PARAMETERS}`.
+
+##### Parameters
+
+| Name | Value | Required | Default |
+| --- | --- | --- | --- |
+| iterations | The number of iterations to perform during the contour process | no | 12 |
+| scale | The scale of the final contoured image | no | 1.0 |
+
 #### halftone://
 
 This handler will dither (halftone) an image before including it in your picturebook.
@@ -245,7 +288,8 @@ Sort images, in ascending order, by their modification times. If two or more ima
 
 * https://github.com/aaronland/go-picturebook-cooperhewitt
 * https://github.com/aaronland/go-picturebook-flickr
-* https://github.com/jung-kurt/gofpdf
+* https://github.com/go-pdf/fpdf
 * https://github.com/aaronland/go-image-tools
 * https://github.com/aaronland/go-image-halftone
+* https://github.com/aaronland/go-image-contour
 * https://gocloud.dev/howto/blob/

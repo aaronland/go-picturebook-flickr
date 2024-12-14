@@ -2,10 +2,11 @@ package filter
 
 import (
 	"context"
-	pb_filter "github.com/aaronland/go-picturebook/filter"
-	"gocloud.dev/blob"
 	"net/url"
 	"path/filepath"
+
+	pb_filter "github.com/aaronland/go-picturebook/filter"
+	"gocloud.dev/blob"	
 )
 
 func init() {

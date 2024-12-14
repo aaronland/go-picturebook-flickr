@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pb_caption "github.com/aaronland/go-picturebook/caption"
-	"github.com/tidwall/gjson"
-	"gocloud.dev/blob"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
+
+	pb_caption "github.com/aaronland/go-picturebook/caption"
+	"github.com/tidwall/gjson"
+	"gocloud.dev/blob"	
 )
 
 func init() {
@@ -69,7 +70,7 @@ func (c *FlickrCaption) Text(ctx context.Context, bucket *blob.Bucket, path stri
 
 	defer fh.Close()
 
-	body, err := ioutil.ReadAll(fh)
+	body, err := io.ReadAll(fh)
 
 	var item interface{}
 	err = json.Unmarshal(body, &item)

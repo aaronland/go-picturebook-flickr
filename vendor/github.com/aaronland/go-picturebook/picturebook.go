@@ -4,93 +4,284 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"github.com/aaronland/go-image-rotate"
-	"github.com/aaronland/go-image-tools/util"
+	"image/png"
+	"io"
+	"log/slog"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"github.com/aaronland/go-image/decode"
+	"github.com/aaronland/go-image/rotate"
+	"github.com/aaronland/go-mimetypes"
 	"github.com/aaronland/go-picturebook/caption"
 	"github.com/aaronland/go-picturebook/filter"
 	"github.com/aaronland/go-picturebook/picture"
 	"github.com/aaronland/go-picturebook/process"
 	"github.com/aaronland/go-picturebook/sort"
 	"github.com/aaronland/go-picturebook/tempfile"
-	"github.com/jung-kurt/gofpdf"
-	"github.com/rainycape/unidecode"
+	"github.com/aaronland/go-picturebook/text"
+	"github.com/go-pdf/fpdf"
 	"github.com/sfomuseum/go-font-ocra"
 	"gocloud.dev/blob"
-	"io"
-	"log"
-	"path/filepath"
-	"strings"
-	"sync"
 )
 
+// MM2INCH defines the number if millimeters in an inch.
 const MM2INCH float64 = 25.4
 
+// PictureBookOptions defines a struct containing configuration information for a given picturebook instance.
 type PictureBookOptions struct {
-	Orientation  string
-	Size         string
-	Width        float64
-	Height       float64
-	DPI          float64
-	Border       float64
-	Bleed        float64
-	MarginTop    float64
+	// The orientation of the final picturebook. Valid options are "P" and "L" for portrait and landscape respectively.
+	Orientation string
+	// A string label corresponding to known size. Valid options are "a1", "a2", "a3", "a4", "a5", "a6", "a7", "letter", "legal" and "tabloid".
+	Size string
+	// The width of the final picturebook.
+	Width float64
+	// The height of the final picturebook.
+	Height float64
+	// The unit of measurement to use for the `Width` and `Height` options.
+	Units string
+	// The number dots per inch to use when calculating the size of the final picturebook. Valid options are "inches", "centimeters", "millimeters".
+	DPI float64
+	// The size of any border to apply to each image in the final picturebook.
+	Border float64
+	// The size of any additional bleed to apply to the final picturebook.
+	Bleed float64
+	// The size of any margin to add to the top of each page.
+	MarginTop float64
+	// The size of any margin to add to the bottom of each page.
 	MarginBottom float64
-	MarginLeft   float64
-	MarginRight  float64
-	Filter       filter.Filter
-	PreProcess   process.Process
-	Caption      caption.Caption
-	Sort         sort.Sorter
-	FillPage     bool
-	Verbose      bool
-	OCRAFont     bool
-	Source       *blob.Bucket
-	Target       *blob.Bucket
-	EvenOnly     bool
-	OddOnly      bool
+	// The size of any margin to add to the left-hand side of each page.
+	MarginLeft float64
+	// The size of any margin to add to the right-hand side of each page.
+	MarginRight float64
+	// An optional `filter.Filter` instance used to determine whether or not an image should be included in the final picturebook.
+	Filter filter.Filter
+	// Zero or more optional `process.Process` instance used to transform images being included in the final picturebook.
+	PreProcess process.Process
+	// Zero or more optional `process.Process` instance used to transform images after having been rotated to fill the page and before being included in the final picturebook.
+	RotateToFillPostProcess process.Process
+	// An optional `caption.Caption` instance used to derive a caption string for each image added to the final picturebook.
+	Caption caption.Caption
+	// An optional `text.Text` instance used to derive a text string for each image added to the final picturebook.
+	Text text.Text
+	// An optional `sort.Sorter` instance used to sort images before they are added to the final picturebook.
+	Sort sort.Sorter
+	// A boolean value signaling that an image should be rotated if necessary to fill the maximum amount of any given page.
+	FillPage bool
+	// A boolean value to enable verbose logging during the creation of a picturebook.
+	Verbose bool
+	// A boolean value to enable to use of an OCRA font for writing captions.
+	OCRAFont bool
+	// A gocloud.dev/blob `Bucket` instance where source images are stored.
+	Source *blob.Bucket
+	// A gocloud.dev/blob `Bucket` instance where the final picturebook is written to.
+	Target *blob.Bucket
+	// A gocloud.dev/blob `Bucket` instance where are temporary files necessary in the creation of the picturebook are written to.
+	Temporary *blob.Bucket
+	// A boolean value signaling that images should only be added on even-numbered pages.
+	EvenOnly bool
+	// A boolean value signaling that images should only be added on odd-numbered pages.
+	OddOnly bool
+	// An optional value to indicate that a picturebook should not exceed this number of pages
+	MaxPages int
+	Logger   *slog.Logger
 }
 
+// type PictureBookMargins defines a struct for storing margins to be applied to a picturebook
 type PictureBookMargins struct {
-	Top    float64
+	// The size of any margin to add to the top of each page.
+	Top float64
+	// The size of any margin to add to the bottom of each page.
 	Bottom float64
-	Left   float64
-	Right  float64
+	// The size of any margin to add to the left-hand side of each page.
+	Left float64
+	// The size of any margin to add to the right-hand side of each page.
+	Right float64
 }
 
+// type PictureBookBorders defines a struct for storing borders to be applied to a images in a picturebook.
 type PictureBookBorders struct {
-	Top    float64
+	// The size of any border to add to the top of each image.
+	Top float64
+	// The size of any border to add to the bottom of each image.
 	Bottom float64
-	Left   float64
-	Right  float64
+	// The size of any border to add to the left-hand side of each image.
+	Left float64
+	// The size of any border to add to the right-hand side of each image.
+	Right float64
 }
 
+// type PictureBookCanvas defines a struct for storing canvas information for a picturebook.
 type PictureBookCanvas struct {
-	Width  float64
+	// The width of the internal picturebook canvas.
+	Width float64
+	// The height of the internal picturebook canvas.
 	Height float64
 }
 
+// type PictureBookText defines a struct for storing information for how text should be displayed in a picturebook.
 type PictureBookText struct {
-	Font   string
-	Style  string
-	Size   float64
+	// The name of the font to use for text strings.
+	Font string
+	// The style of the font to use for text strings.
+	Style string
+	// The size of the font to use for text strings.
+	Size float64
+	// The margin to apply to text strings.
 	Margin float64
+	// The colour of the font to use for text strings.
 	Colour []int
 }
 
+// type PictureBook provides a struct for creating a PDF file from a folder of images (a picturebook).
 type PictureBook struct {
-	PDF      *gofpdf.Fpdf
-	Mutex    *sync.Mutex
-	Borders  *PictureBookBorders
-	Margins  *PictureBookMargins
-	Canvas   PictureBookCanvas
-	Text     PictureBookText
-	Options  *PictureBookOptions
-	pages    int
+	// A `fpdf.Fpdf` instance used to produce the picturebook PDF file.
+	PDF *fpdf.Fpdf
+	// A `sync.Mutex` instance used to add images in an orderly fashion.
+	Mutex *sync.Mutex
+	// The `PictureBookBorders` definition to use for this picturebook
+	Borders *PictureBookBorders
+	// The `PictureBookMargins` definition to use for this picturebook
+	Margins *PictureBookMargins
+	// The `PictureBookCanvas` definition to use for this picturebook
+	Canvas PictureBookCanvas
+	// The `PictureBookText` definition to use for this picturebook
+	Text PictureBookText
+	// The `PictureBookOptions` used to create this picturebook
+	Options *PictureBookOptions
+	// The `GatherPicturesProcessFunc` function used to determine whether an image is included in a picturebook
+	ProcessFunc GatherPicturesProcessFunc
+	// The number of pages in this picturebook
+	pages int
+	// A list of temporary files used in the creation of a picturebook and to be removed when the picturebook is saved
 	tmpfiles []string
 }
 
+// type GatherPicturesProcessFunc defines a method for processing the path to an image file in to a `picture.PictureBookPicture` instance.
+type GatherPicturesProcessFunc func(context.Context, string) (*picture.PictureBookPicture, error)
+
+//	DefaultGatherPicturesProcessFunc returns a default GatherPicturesProcessFunc used to derive a `picture.PictureBookPicture` instance
+//
+// from the path to an image file. It applies any filters and transformation processes and derives caption data per settings defined in 'pb_opts'.
+func DefaultGatherPicturesProcessFunc(pb_opts *PictureBookOptions) (GatherPicturesProcessFunc, error) {
+
+	fn := func(ctx context.Context, path string) (*picture.PictureBookPicture, error) {
+
+		select {
+		case <-ctx.Done():
+			return nil, nil
+		default:
+			// pass
+		}
+
+		abs_path := path
+		is_image := false
+
+		logger := pb_opts.Logger.With("path", abs_path)
+
+		ext := filepath.Ext(abs_path)
+		ext = strings.ToLower(ext)
+
+		for _, t := range mimetypes.TypesByExtension(ext) {
+			if strings.HasPrefix(t, "image/") {
+				is_image = true
+				break
+			}
+		}
+
+		if !is_image {
+			logger.Debug("File does not appear to be an image, skipping", "extension", ext)
+			return nil, nil
+		}
+
+		if pb_opts.Filter != nil {
+
+			ok, err := pb_opts.Filter.Continue(ctx, pb_opts.Source, abs_path)
+
+			if err != nil {
+				logger.Error("Failed to filter image", "error", err)
+				return nil, nil
+			}
+
+			if !ok {
+				return nil, nil
+			}
+
+			logger.Debug("Include image")
+		}
+
+		caption := ""
+		text_body := ""
+
+		if pb_opts.Caption != nil {
+
+			txt, err := pb_opts.Caption.Text(ctx, pb_opts.Source, abs_path)
+
+			if err != nil {
+				logger.Error("Failed to derive caption text", "error", err)
+				return nil, nil
+			}
+
+			caption = txt
+		}
+
+		if pb_opts.Text != nil {
+
+			txt, err := pb_opts.Text.Body(ctx, pb_opts.Source, abs_path)
+
+			if err != nil {
+				logger.Error("Failed to derive text body", "error", err)
+				return nil, nil
+			}
+
+			text_body = txt
+		}
+
+		var final_bucket *blob.Bucket
+		final_path := abs_path
+
+		var tmpfile_path string
+
+		if pb_opts.PreProcess != nil {
+
+			logger.Debug("Pre-processing image")
+
+			processed_path, err := pb_opts.PreProcess.Transform(ctx, pb_opts.Source, pb_opts.Temporary, abs_path)
+
+			if err != nil {
+				logger.Error("Failed to process image", "error", err)
+				return nil, nil
+			}
+
+			logger.Debug("After pre-processing path becomes", "processed_path", processed_path)
+
+			if processed_path != "" && processed_path != abs_path {
+				final_path = processed_path
+				final_bucket = pb_opts.Temporary
+				tmpfile_path = processed_path
+			}
+		}
+
+		logger.Debug("Append path to list for processing", "final_path", final_path)
+
+		pic := &picture.PictureBookPicture{
+			Source:   abs_path,
+			Bucket:   final_bucket,
+			Path:     final_path,
+			Caption:  caption,
+			Text:     text_body,
+			TempFile: tmpfile_path,
+		}
+
+		return pic, nil
+	}
+
+	return fn, nil
+}
+
+// NewPictureBookDefaultOptions returns a `PictureBookOptions` with default settings.
 func NewPictureBookDefaultOptions(ctx context.Context) (*PictureBookOptions, error) {
 
 	opts := &PictureBookOptions{
@@ -98,6 +289,7 @@ func NewPictureBookDefaultOptions(ctx context.Context) (*PictureBookOptions, err
 		Size:         "letter",
 		Width:        0.0,
 		Height:       0.0,
+		Units:        "inches",
 		DPI:          150.0,
 		Border:       0.01,
 		Bleed:        0.0,
@@ -106,14 +298,20 @@ func NewPictureBookDefaultOptions(ctx context.Context) (*PictureBookOptions, err
 		MarginLeft:   1.0,
 		MarginRight:  1.0,
 		Verbose:      false,
+		Logger:       slog.Default(),
 	}
 
 	return opts, nil
 }
 
+// NewPictureBook returns a new `PictureBook` instances configured according to the settings in 'opts'.
 func NewPictureBook(ctx context.Context, opts *PictureBookOptions) (*PictureBook, error) {
 
-	var pdf *gofpdf.Fpdf
+	var pdf *fpdf.Fpdf
+
+	// opts_w := opts.Width
+	// opts_h := opts.Height
+	// opts_b := opts.Bleed
 
 	// Start by convert everything to inches - not because it's better but
 	// just because it's expedient right now (20210218/straup)
@@ -154,16 +352,30 @@ func NewPictureBook(ctx context.Context, opts *PictureBookOptions) (*PictureBook
 		default:
 			return nil, fmt.Errorf("Unrecognized page size '%s'", opts.Size)
 		}
+	} else {
+
+		switch opts.Units {
+		case "inches":
+			// pass
+		case "millimeters":
+			opts.Width = opts.Width / MM2INCH
+			opts.Height = opts.Height / MM2INCH
+		case "centimeters":
+			opts.Width = (opts.Width * 10.0) / MM2INCH
+			opts.Height = (opts.Height * 10.0) / MM2INCH
+		default:
+			return nil, fmt.Errorf("Invalid or unsupported unit '%s'", opts.Units)
+		}
 	}
 
 	// log.Printf("%0.2f x %0.2f (%s)\n", opts.Width, opts.Height, opts.Size)
 
-	sz := gofpdf.SizeType{
+	sz := fpdf.SizeType{
 		Wd: opts.Width + (opts.Bleed * 2.0),
 		Ht: opts.Height + (opts.Bleed * 2.0),
 	}
 
-	init := gofpdf.InitType{
+	init := fpdf.InitType{
 		OrientationStr: opts.Orientation,
 		UnitStr:        "in",
 		SizeStr:        "",
@@ -171,17 +383,7 @@ func NewPictureBook(ctx context.Context, opts *PictureBookOptions) (*PictureBook
 		FontDirStr:     "",
 	}
 
-	pdf = gofpdf.NewCustom(&init)
-
-	/*
-		} else {
-
-			// TO DO: ACCOUNT FOR BLEED
-			// func (f *Fpdf) GetPageSizeStr(sizeStr string) (size SizeType) {
-
-			pdf = gofpdf.New(opts.Orientation, "in", opts.Size, "")
-		}
-	*/
+	pdf = fpdf.NewCustom(&init)
 
 	t := PictureBookText{
 		Font:   "Helvetica",
@@ -196,7 +398,7 @@ func NewPictureBook(ctx context.Context, opts *PictureBookOptions) (*PictureBook
 		font, err := ocra.LoadFPDFFont()
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Failed to load OCRA font, %w", err)
 		}
 
 		pdf.AddFontFromBytes(font.Family, font.Style, font.JSON, font.Z)
@@ -259,39 +461,45 @@ func NewPictureBook(ctx context.Context, opts *PictureBookOptions) (*PictureBook
 	tmpfiles := make([]string, 0)
 	mu := new(sync.Mutex)
 
+	process_func, err := DefaultGatherPicturesProcessFunc(opts)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to return DefaultGatherPicturesProcessFunc, %w", err)
+	}
+
 	pb := PictureBook{
-		PDF:      pdf,
-		Mutex:    mu,
-		Borders:  borders,
-		Margins:  margins,
-		Canvas:   canvas,
-		Text:     t,
-		Options:  opts,
-		pages:    0,
-		tmpfiles: tmpfiles,
+		PDF:         pdf,
+		Mutex:       mu,
+		Borders:     borders,
+		Margins:     margins,
+		Canvas:      canvas,
+		Text:        t,
+		Options:     opts,
+		ProcessFunc: process_func,
+		pages:       0,
+		tmpfiles:    tmpfiles,
 	}
 
 	return &pb, nil
 }
 
+// AddPictures adds images founds in one or more folders defined 'paths' to the picturebook instance.
 func (pb *PictureBook) AddPictures(ctx context.Context, paths []string) error {
 
 	pictures, err := pb.GatherPictures(ctx, paths)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to gather pictures, %w", err)
 	}
 
-	if pb.Options.Verbose {
-		log.Printf("Count pictures gathered: %d\n", len(pictures))
-	}
+	pb.Options.Logger.Debug("Pictures gathered", "count", len(pictures))
 
 	if pb.Options.Sort != nil {
 
 		sorted, err := pb.Options.Sort.Sort(ctx, pb.Options.Source, pictures)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed to sort pictures, %w", err)
 		}
 
 		pictures = sorted
@@ -314,7 +522,17 @@ func (pb *PictureBook) AddPictures(ctx context.Context, paths []string) error {
 				pagenum = pb.pages
 			}
 
-			err = pb.AddPicture(ctx, pagenum, pic.Path, pic.Caption)
+			if pic.Text != "" {
+				pb.AddText(ctx, pagenum, pic)
+				pb.pages += 1
+				pagenum = pb.pages
+
+				pb.AddBlankPage(ctx, pagenum)
+				pb.pages += 1
+				pagenum = pb.pages
+			}
+
+			err = pb.AddPicture(ctx, pagenum, pic)
 
 		} else if pb.Options.OddOnly {
 
@@ -330,102 +548,43 @@ func (pb *PictureBook) AddPictures(ctx context.Context, paths []string) error {
 				pagenum = pb.pages
 			}
 
-			err = pb.AddPicture(ctx, pagenum, pic.Path, pic.Caption)
+			if pic.Text != "" {
+				pb.AddText(ctx, pagenum, pic)
+				pb.pages += 1
+				pagenum = pb.pages
+
+				pb.AddBlankPage(ctx, pagenum)
+				pb.pages += 1
+				pagenum = pb.pages
+			}
+
+			err = pb.AddPicture(ctx, pagenum, pic)
 
 		} else {
-			err = pb.AddPicture(ctx, pagenum, pic.Path, pic.Caption)
+
+			if pic.Text != "" {
+				pb.AddText(ctx, pagenum, pic)
+				pb.pages += 1
+				pagenum = pb.pages
+			}
+
+			err = pb.AddPicture(ctx, pagenum, pic)
 		}
 
-		if err != nil && pb.Options.Verbose {
-			log.Printf("Failed to add %s, %v", pic.Path, err)
+		if err != nil {
+			pb.Options.Logger.Debug("Failed to add picture", "path", pic.Path, "error", err)
 		}
 	}
 
 	return nil
 }
 
+// GatherPictures collects all the images in one or more folders defined by 'paths' and returns a list of `picture.PictureBookPicture` instances.
 func (pb *PictureBook) GatherPictures(ctx context.Context, paths []string) ([]*picture.PictureBookPicture, error) {
 
 	pictures := make([]*picture.PictureBookPicture, 0)
 
 	var list func(context.Context, *blob.Bucket, string) error
-
-	file := func(ctx context.Context, b *blob.Bucket, path string) error {
-
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			// pass
-		}
-
-		abs_path := path
-
-		if pb.Options.Filter != nil {
-
-			ok, err := pb.Options.Filter.Continue(ctx, pb.Options.Source, abs_path)
-
-			if err != nil {
-				log.Printf("Failed to filter %s, %v\n", abs_path, err)
-				return nil
-			}
-
-			if !ok {
-				return nil
-			}
-
-			if pb.Options.Verbose {
-				log.Printf("Include %s\n", abs_path)
-			}
-		}
-
-		caption := ""
-
-		if pb.Options.Caption != nil {
-
-			txt, err := pb.Options.Caption.Text(ctx, pb.Options.Source, abs_path)
-
-			if err != nil {
-				log.Printf("Failed to generate caption text for %s, %v\n", abs_path, err)
-				return nil
-			}
-
-			caption = txt
-		}
-
-		final_path := abs_path
-
-		if pb.Options.PreProcess != nil {
-
-			if pb.Options.Verbose {
-				log.Printf("Processing %s\n", abs_path)
-			}
-
-			processed_path, err := pb.Options.PreProcess.Transform(ctx, pb.Options.Source, abs_path)
-
-			if err != nil {
-				log.Printf("Failed to process %s, %v\n", abs_path, err)
-				return nil
-			}
-
-			if processed_path != "" {
-				pb.tmpfiles = append(pb.tmpfiles, processed_path)
-				final_path = processed_path
-			}
-		}
-
-		pb.Mutex.Lock()
-		defer pb.Mutex.Unlock()
-
-		pic := &picture.PictureBookPicture{
-			Source:  abs_path,
-			Path:    final_path,
-			Caption: caption,
-		}
-
-		pictures = append(pictures, pic)
-		return nil
-	}
 
 	list = func(ctx context.Context, bucket *blob.Bucket, prefix string) error {
 
@@ -442,7 +601,7 @@ func (pb *PictureBook) GatherPictures(ctx context.Context, paths []string) ([]*p
 			}
 
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to iterate next in bucket for %s, %w", prefix, err)
 			}
 
 			path := obj.Key
@@ -452,16 +611,35 @@ func (pb *PictureBook) GatherPictures(ctx context.Context, paths []string) ([]*p
 				err := list(ctx, bucket, path)
 
 				if err != nil {
-					return err
+					return fmt.Errorf("Failed to list bucket for %s, %w", path, err)
 				}
 
 				continue
 			}
 
-			err = file(ctx, bucket, path)
+			pic, err := pb.ProcessFunc(ctx, path)
 
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to apply ProcessFunc for %s, %w", path, err)
+			}
+
+			if pic == nil {
+				continue
+			}
+
+			if pic.TempFile != "" {
+				pb.tmpfiles = append(pb.tmpfiles, pic.TempFile)
+			}
+
+			pb.Mutex.Lock()
+
+			pictures = append(pictures, pic)
+			count_pictures := len(pictures)
+
+			pb.Mutex.Unlock()
+
+			if pb.Options.MaxPages > 0 && count_pictures >= pb.Options.MaxPages {
+				break
 			}
 		}
 
@@ -473,47 +651,136 @@ func (pb *PictureBook) GatherPictures(ctx context.Context, paths []string) ([]*p
 		err := list(ctx, pb.Options.Source, path)
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Failed to list bucket for %s, %w", path, err)
 		}
 	}
 
 	return pictures, nil
 }
 
+// AddBlankPage add a blank page the final PDF document at page 'pagenum'.
 func (pb *PictureBook) AddBlankPage(ctx context.Context, pagenum int) error {
 	pb.PDF.AddPage()
 	return nil
 }
 
-func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path string, caption string) error {
+// AddText add the value of `pic.Text` on the adjacent page to `pic`.
+func (pb *PictureBook) AddText(ctx context.Context, pagenum int, pic *picture.PictureBookPicture) error {
 
 	pb.Mutex.Lock()
 	defer pb.Mutex.Unlock()
 
-	im_r, err := pb.Options.Source.NewReader(ctx, abs_path, nil)
+	pb.PDF.AddPage()
+
+	_, line_h := pb.PDF.GetFontSize()
+
+	max_w := pb.Canvas.Width
+	// max_h := pb.Canvas.Height - (pb.Text.Margin + line_h)
+
+	/*
+		w := max_w
+		h := max_h
+	*/
+
+	margins := pb.Margins
+
+	current_x := margins.Left
+	current_y := margins.Top
+
+	// START OF reconcile me with code for rendering captions...
+
+	prepped := text.PrepareText(pb.PDF, pb.Options.DPI, max_w, pic.Text)
+
+	for _, txt := range prepped {
+
+		txt = strings.TrimSpace(txt)
+
+		// txt_w := pb.PDF.GetStringWidth(txt)
+		txt_h := line_h
+
+		/*
+			txt_w = txt_w + pb.Text.Margin
+		*/
+		txt_h = txt_h + pb.Text.Margin
+
+		// log.Printf("DEBUG %d max: %f03 w: %f03 %s\n", len(txt), max_w, txt_w*pb.Options.DPI, txt)
+		// please do this in the constructor...
+		// (20171128/thisisaaronland)
+
+		font_sz, _ := pb.PDF.GetFontSize()
+		pb.PDF.SetFontSize(font_sz + 2)
+
+		_, line_h := pb.PDF.GetFontSize()
+
+		pb.PDF.SetFontSize(font_sz)
+
+		txt_x := current_x / pb.Options.DPI
+		txt_y := (current_y / pb.Options.DPI)
+
+		// pb.Options.Logger.Debug("[%d][%s] text at %0.2f x %0.2f (- x %0.2f)\n", pagenum, pic.Path, txt_x, txt_y, txt_h)
+
+		pb.PDF.SetXY(txt_x, txt_y)
+
+		html := pb.PDF.HTMLBasicNew()
+		html.Write(line_h, txt)
+
+		current_y += ((txt_h * pb.Options.DPI) * .65)
+	}
+
+	// END OF reconcile me with code for rendering captions...
+
+	return nil
+}
+
+func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, pic *picture.PictureBookPicture) error {
+
+	pb.Mutex.Lock()
+	defer pb.Mutex.Unlock()
+
+	abs_path := pic.Path
+	caption := pic.Caption
+
+	is_tempfile := false
+
+	picture_bucket := pb.Options.Source
+
+	if pic.Bucket != nil {
+		picture_bucket = pic.Bucket
+	}
+
+	logger := pb.Options.Logger.With("path", abs_path, "page_number", pagenum)
+
+	im_r, err := picture_bucket.NewReader(ctx, abs_path, nil)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to create new bucket for %s, %w", abs_path, err)
 	}
 
 	defer im_r.Close()
 
-	im, format, err := util.DecodeImageFromReader(im_r)
+	dec, err := decode.NewDecoder(ctx, abs_path)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to create new decoder for %s, %w", abs_path, err)
 	}
 
-	// trap gofpdf "16-bit depth not supported in PNG file" errors
+	im, format, err := dec.Decode(ctx, im_r)
+
+	if err != nil {
+		return fmt.Errorf("Failed to decode image for %s, %w", abs_path, err)
+	}
+
+	// START OF put me somewhere in aaronland/go-image ... maybe?
+	// trap fpdf "16-bit depth not supported in PNG file" errors
 
 	if format == "png" {
 
 		buf := new(bytes.Buffer)
 
-		err = util.EncodeImage(im, format, buf)
+		err = png.Encode(buf, im)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed to encode PNG image for %s, %w", abs_path, err)
 		}
 
 		// this bit is cribbed from https://github.com/jung-kurt/gofpdf/blob/7d57599b9d9c5fb48ea733596cbb812d7f84a8d6/png.go
@@ -530,31 +797,31 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 
 		if bpc > 8 {
 
-			tmpfile_path, tmpfile_format, err := tempfile.TempFileWithImage(ctx, pb.Options.Source, im)
+			tmpfile_path, tmpfile_format, err := tempfile.TempFileWithImage(ctx, pb.Options.Temporary, im)
 
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to generate tempfile for %s, %w", abs_path, err)
 			}
 
-			if pb.Options.Verbose {
-				log.Printf("%s converted to a JPG (%s)\n", abs_path, tmpfile_path)
-			}
+			logger.Debug("PNG converted to a JPG", "tmpfile_path", tmpfile_path)
 
 			pb.tmpfiles = append(pb.tmpfiles, tmpfile_path)
 
 			abs_path = tmpfile_path
 			format = tmpfile_format
+
+			is_tempfile = true
 		}
 	}
+
+	// END OF put me somewhere in aaronland/go-image ... maybe?
 
 	dims := im.Bounds()
 
 	w := float64(dims.Max.X)
 	h := float64(dims.Max.Y)
 
-	if pb.Options.Verbose {
-		log.Printf("[%d][%s] dimensions %0.2f x %0.2f\n", pagenum, abs_path, w, h)
-	}
+	logger.Debug("Dimensions", slog.Float64("width", w), slog.Float64("height", h))
 
 	if pb.Options.FillPage {
 
@@ -585,9 +852,7 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 
 		if rotate_to_fill {
 
-			if pb.Options.Verbose {
-				log.Printf("Rotate %s\b", abs_path)
-			}
+			pb.Options.Logger.Debug("Rotate image to fill path", "path", abs_path)
 
 			new_im, err := rotate.RotateImageWithDegrees(ctx, im, 90.0)
 
@@ -603,57 +868,63 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 
 			// now save to disk...
 
-			tmpfile_path, tmpfile_format, err := tempfile.TempFileWithImage(ctx, pb.Options.Source, im)
+			tmpfile_path, tmpfile_format, err := tempfile.TempFileWithImage(ctx, pb.Options.Temporary, im)
 
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to create temporary file (rotate to fill) for %s, %w", abs_path, err)
+			}
+
+			if pb.Options.RotateToFillPostProcess != nil {
+
+				tmpfile_path, err = pb.Options.RotateToFillPostProcess.Transform(ctx, pb.Options.Temporary, pb.Options.Temporary, tmpfile_path)
+
+				if err != nil {
+					return fmt.Errorf("Failed to apply colour space transformations to temporary file (rotate to fill), %w", err)
+				}
 			}
 
 			pb.tmpfiles = append(pb.tmpfiles, tmpfile_path)
 
-			if pb.Options.Verbose {
-				log.Printf("%s converted to a JPG (%s)\n", abs_path, tmpfile_path)
-			}
+			logger.Debug("Append rotated image", "tmpfile_path", tmpfile_path)
 
 			abs_path = tmpfile_path
 			format = tmpfile_format
+
+			is_tempfile = true
 		}
 	}
 
-	info := pb.PDF.GetImageInfo(abs_path)
-
-	if info == nil {
-
-		opts := gofpdf.ImageOptions{
-			ReadDpi:   false,
-			ImageType: format,
-		}
-
-		r, err := pb.Options.Source.NewReader(ctx, abs_path, nil)
-
-		if err != nil {
-			return err
-		}
-
-		defer r.Close()
-
-		info = pb.PDF.RegisterImageOptionsReader(abs_path, opts, r)
-
+	opts := fpdf.ImageOptions{
+		ReadDpi:   false,
+		ImageType: format,
 	}
 
+	var r io.ReadCloser
+
+	if is_tempfile {
+		r, err = pb.Options.Temporary.NewReader(ctx, abs_path, nil)
+	} else {
+		r, err = picture_bucket.NewReader(ctx, abs_path, nil)
+	}
+
+	if err != nil {
+		return fmt.Errorf("Failed to create new reader (info) for %s, %v", abs_path, err)
+	}
+
+	defer r.Close()
+
+	info := pb.PDF.RegisterImageOptionsReader(abs_path, opts, r)
+
 	if info == nil {
-		return errors.New("unable to determine info")
+		return fmt.Errorf("unable to determine info for %s", abs_path)
 	}
 
 	info.SetDpi(pb.Options.DPI)
 
-	if pb.Options.Verbose {
-		log.Printf("[%d][%s] dimensions %02.f x %02.f\n", pagenum, abs_path, w, h)
-	}
+	logger.Debug("Dimensions", slog.Float64("width", w), slog.Float64("height", h))
 
 	if w == 0.0 || h == 0.0 {
-		msg := fmt.Sprintf("[%d] %s has zero-sized dimension", pagenum, abs_path)
-		return errors.New(msg)
+		return fmt.Errorf("[%d] %s has zero-sized dimension", pagenum, abs_path)
 	}
 
 	// Remember: margins have been calculated inclusive of page bleeds
@@ -665,24 +936,18 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 
 	_, line_h := pb.PDF.GetFontSize()
 
-	if pb.Options.Verbose {
-		log.Printf("[%d][%s] margins, left and right %0.2f\n", pagenum, abs_path, (margins.Left + margins.Right))
-		log.Printf("[%d][%s] margins, top and bottom %0.2f\n", pagenum, abs_path, (margins.Top + margins.Bottom))
-		log.Printf("[%d][%s] margins, caption %0.2f\n", pagenum, abs_path, (pb.Text.Margin + line_h))
-	}
+	logger.Debug("margins", slog.Float64("left_and_right", (margins.Left+margins.Right)))
+	logger.Debug("margins", slog.Float64("top_and_bottom", (margins.Top+margins.Bottom)))
+	logger.Debug("margins", slog.Float64("caption", (pb.Text.Margin+line_h)))
 
 	max_w := pb.Canvas.Width
 	max_h := pb.Canvas.Height
 
-	if pb.Options.Verbose {
-		log.Printf("[%d][%s] max dimensions %0.2f (%0.2f) x %0.2f (%0.2f)\n", pagenum, abs_path, max_w, w, max_h, h)
-	}
+	logger.Debug("max dimensions", slog.Float64("max_width", max_w), slog.Float64("width", w), slog.Float64("max_height", max_h), slog.Float64("height", h))
 
 	for {
 
 		if w >= max_w || h >= max_h {
-
-			// log.Printf("[%d] WTF 1 %0.2f x %0.2f (%0.2f x %0.2f) \n", pagenum, w, h, max_w, max_h)
 
 			if w > max_w {
 
@@ -706,15 +971,8 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 
 		if w <= max_w && h <= max_h {
 			break
-
-			if h < max_h {
-				h = max_h
-			}
-
 		}
 	}
-
-	// log.Printf("[%d][%s] max dimensions (1) %0.2f (%0.2f) H  %0.2f (%0.2f)\n", pagenum, abs_path, max_w, w, max_h, h)
 
 	if w < max_w {
 		padding := max_w - w
@@ -726,17 +984,11 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 		y = y + (padding / 2.0)
 	}
 
-	// log.Printf("[%d][%s] max dimensions (2) %0.2f (%0.2f) H  %0.2f (%0.2f)\n", pagenum, abs_path, max_w, w, max_h, h)
-
-	if pb.Options.Verbose {
-		log.Printf("[%d][%s] final %0.2f x %0.2f (%0.2f x %0.2f)\n", pagenum, abs_path, w, h, x, y)
-	}
+	logger.Debug("final dimensions", slog.Float64("width", w), slog.Float64("height", h), slog.Float64("x", x), slog.Float64("y", y))
 
 	pb.PDF.AddPage()
 
-	if pb.Options.Verbose {
-		log.Printf("[%d][%s] final dimensions %0.2f x %0.2f (%0.2f x %0.2f)\n", pagenum, abs_path, w, h, x, y)
-	}
+	// logger.Debug("final dimensions %0.2f x %0.2f (%0.2f x %0.2f)", w, h, x, y)
 
 	// draw margins
 
@@ -745,9 +997,7 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 	mw := w / pb.Options.DPI
 	mh := h / pb.Options.DPI
 
-	if pb.Options.Verbose {
-		log.Printf("[%d][%s] margin  %0.2f x %0.2f @ %0.2f x %0.2f\n", pagenum, abs_path, mx, my, mw, mh)
-	}
+	logger.Debug("margin", slog.Float64("x", mx), slog.Float64("y", my), slog.Float64("width", mw), slog.Float64("height", mh))
 
 	pb.PDF.SetFillColor(0, 0, 0)
 	pb.PDF.Rect(mx, my, mw, mh, "FD")
@@ -764,9 +1014,7 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 		bw := (w + borders.Left + borders.Right) / pb.Options.DPI
 		bh := (h + borders.Top + borders.Bottom) / pb.Options.DPI
 
-		if pb.Options.Verbose {
-			log.Printf("[%d][%s] border  %0.2f x %0.2f @ %0.2f x %0.2f\n", pagenum, abs_path, bx, by, bw, bh)
-		}
+		logger.Debug("border", slog.Float64("x", bx), slog.Float64("y", by), slog.Float64("width", bw), slog.Float64("height", bh))
 
 		pb.PDF.SetFillColor(0, 0, 0)
 		pb.PDF.Rect(bx, by, bw, bh, "FD")
@@ -774,9 +1022,9 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 
 	// draw the image
 
-	// https://godoc.org/github.com/jung-kurt/gofpdf#ImageOptions
+	// https://godoc.org/github.com/jung-kurt/fpdf#ImageOptions
 
-	image_opts := gofpdf.ImageOptions{
+	image_opts := fpdf.ImageOptions{
 		ReadDpi:   false,
 		ImageType: format,
 	}
@@ -786,71 +1034,65 @@ func (pb *PictureBook) AddPicture(ctx context.Context, pagenum int, abs_path str
 	image_w := w / pb.Options.DPI
 	image_h := h / pb.Options.DPI
 
-	if pb.Options.Verbose {
-		// log.Printf("[%d][%s] image  %0.2f x %0.2f @ %0.2f x %0.2f\n", pagenum, abs_path, x, y, w, h)
-		log.Printf("[%d][%s] image  %0.2f x %0.2f @ %0.2f x %0.2f\n", pagenum, abs_path, image_x, image_y, image_w, image_h)
-	}
+	logger.Debug("image", slog.Float64("x", image_x), slog.Float64("y", image_y), slog.Float64("width", image_w), slog.Float64("height", image_h))
 
 	pb.PDF.ImageOptions(abs_path, image_x, image_y, image_w, image_h, false, image_opts, 0, "")
 
 	if caption != "" {
 
-		txt := caption
+		current_x := x
+		current_y := y
 
-		txt_w := pb.PDF.GetStringWidth(txt)
-		txt_h := line_h
+		for _, txt := range strings.Split(caption, "\n") {
 
-		txt_w = txt_w + pb.Text.Margin
-		txt_h = txt_h + pb.Text.Margin
+			txt = strings.TrimSpace(txt)
 
-		// please do this in the constructor...
-		// (20171128/thisisaaronland)
+			txt_w := pb.PDF.GetStringWidth(txt)
+			txt_h := line_h
 
-		font_sz, _ := pb.PDF.GetFontSize()
-		pb.PDF.SetFontSize(font_sz + 2)
+			txt_w = txt_w + pb.Text.Margin
+			txt_h = txt_h + pb.Text.Margin
 
-		_, line_h := pb.PDF.GetFontSize()
+			// please do this in the constructor...
+			// (20171128/thisisaaronland)
 
-		if pb.Options.Verbose {
-			log.Printf("[%d][%s] line height %0.2f\n", pagenum, abs_path, line_h)
+			font_sz, _ := pb.PDF.GetFontSize()
+			pb.PDF.SetFontSize(font_sz + 2)
+
+			_, line_h := pb.PDF.GetFontSize()
+
+			logger.Debug("line height %0.2f", line_h)
+
+			pb.PDF.SetFontSize(font_sz)
+
+			txt_x := ((current_x + w) / pb.Options.DPI) - txt_w
+			txt_y := ((current_y + h) / pb.Options.DPI) + line_h
+
+			logger.Debug("Text", slog.Float64("x", txt_x), slog.Float64("y", txt_y), slog.Float64("width", txt_w), slog.Float64("height", txt_h))
+
+			// pb.PDF.SetFillColor(255, 255, 255)
+			// pb.PDF.Rect(txt_x, txt_y, txt_w, txt_h, "FD")
+
+			pb.PDF.SetXY(txt_x, txt_y)
+
+			logger.Debug("caption", "text", txt)
+
+			html := pb.PDF.HTMLBasicNew()
+			html.Write(line_h, txt)
+
+			current_y += ((txt_h * pb.Options.DPI) * .65)
 		}
-
-		pb.PDF.SetFontSize(font_sz)
-
-		txt_x := ((x + w) / pb.Options.DPI) - txt_w
-		txt_y := ((y + h) / pb.Options.DPI) + line_h
-
-		if pb.Options.Verbose {
-			log.Printf("[%d][%s] text at %0.2f x %0.2f (%0.2f x %0.2f)\n", pagenum, abs_path, txt_x, txt_y, txt_w, txt_h)
-		}
-
-		// pb.PDF.SetFillColor(255, 255, 255)
-		// pb.PDF.Rect(txt_x, txt_y, txt_w, txt_h, "FD")
-
-		pb.PDF.SetXY(txt_x, txt_y)
-
-		// please account for lack of utf-8 support (20171128/thisisaaronland)
-		// https://github.com/jung-kurt/gofpdf/blob/cc7f4a2880e224dc55d15289863817df6d9f6893/fpdf_test.go#L1440-L1478
-		// tr := pb.PDF.UnicodeTranslatorFromDescriptor("utf8")
-		// txt = tr(txt)
-
-		txt = unidecode.Unidecode(txt)
-
-		if pb.Options.Verbose {
-			log.Printf("[%d][%s] caption '%s'\n", pagenum, abs_path, txt)
-		}
-
-		html := pb.PDF.HTMLBasicNew()
-		html.Write(line_h, txt)
 	}
 
 	return nil
 }
 
+// Save will write the picturebook to 'path' in the `Target` bucket specified in the `PictureBookOptions`
+// used to create the picturebook option.
 func (pb *PictureBook) Save(ctx context.Context, path string) error {
 
 	if pb.Options.Target == nil {
-		return errors.New("Missing or invalid target bucket")
+		return fmt.Errorf("Missing or invalid target bucket")
 	}
 
 	// move this out of here...
@@ -869,38 +1111,34 @@ func (pb *PictureBook) Save(ctx context.Context, path string) error {
 				continue
 			}
 
-			if pb.Options.Verbose {
-				log.Printf("Remove tmp file '%s'\n", path)
-			}
+			pb.Options.Logger.Debug("Remove tmp file", "path", path)
 
-			err := pb.Options.Source.Delete(ctx, path)
+			err := pb.Options.Temporary.Delete(ctx, path)
 
 			if err != nil {
-				log.Printf("Failed to delete %s, %v\n", path, err)
+				pb.Options.Logger.Error("Failed to delete tmp file", "path", path, "error", err)
 			}
 		}
 	}()
 
-	if pb.Options.Verbose {
-		log.Printf("Save %s\n", path)
-	}
+	pb.Options.Logger.Debug("Save picturebook", "path", path)
 
 	wr, err := pb.Options.Target.NewWriter(ctx, path, nil)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to create a new writer for %s, %w", path, err)
 	}
 
 	err = pb.PDF.Output(wr)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to output PDF file for %s, %w", path, err)
 	}
 
 	err = wr.Close()
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to close writer for %s, %w", path, err)
 	}
 
 	return nil

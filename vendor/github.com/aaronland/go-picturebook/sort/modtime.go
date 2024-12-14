@@ -3,11 +3,11 @@ package sort
 import (
 	"context"
 	"fmt"
-	"github.com/aaronland/go-picturebook/picture"
-	"gocloud.dev/blob"
-	"log"
 	"net/url"
 	"sort"
+
+	"github.com/aaronland/go-picturebook/picture"
+	"gocloud.dev/blob"
 )
 
 func init() {
@@ -20,22 +20,25 @@ func init() {
 	}
 }
 
+// type ModTimeSorter implements the `Sorter` interface to sort a list of `picture.PictureBookPicture` by their modification dates.
 type ModTimeSorter struct {
 	Sorter
 }
 
+// NewModTimeSorter returns a new instance of `ModTimeSorter` for 'uri' which must be parsable as a valid `net/url` URL instance.
 func NewModTimeSorter(ctx context.Context, uri string) (Sorter, error) {
 
 	_, err := url.Parse(uri)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to parse URI for NewModTimeSorter, %w", err)
 	}
 
 	s := &ModTimeSorter{}
 	return s, nil
 }
 
+// Sort sorts a list of `picture.PictureBookPicture` by their modification dates.
 func (f *ModTimeSorter) Sort(ctx context.Context, bucket *blob.Bucket, pictures []*picture.PictureBookPicture) ([]*picture.PictureBookPicture, error) {
 
 	lookup := make(map[string]*picture.PictureBookPicture)
@@ -48,14 +51,12 @@ func (f *ModTimeSorter) Sort(ctx context.Context, bucket *blob.Bucket, pictures 
 		r, err := bucket.NewReader(ctx, path, nil)
 
 		if err != nil {
-			log.Println(path, err)
-			continue
+			return nil, fmt.Errorf("Failed to open %s for modtime sorting, %v\n", path, err)
 		}
-
-		defer r.Close()
 
 		mtime := r.ModTime()
 		sz := r.Size()
+		r.Close()
 
 		ts := mtime.Unix()
 
