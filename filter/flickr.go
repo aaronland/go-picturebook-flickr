@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	pb_filter "github.com/aaronland/go-picturebook/filter"
-	"gocloud.dev/blob"	
+	"github.com/aaronland/go-picturebook/bucket"	
 )
 
 func init() {
@@ -36,7 +36,7 @@ func NewFlickrFilter(ctx context.Context, uri string) (pb_filter.Filter, error) 
 	return f, nil
 }
 
-func (f *FlickrFilter) Continue(ctx context.Context, bucket *blob.Bucket, path string) (bool, error) {
+func (f *FlickrFilter) Continue(ctx context.Context, source_bucket bucket.Bucket, path string) (bool, error) {
 
 	fname := filepath.Base(path)
 

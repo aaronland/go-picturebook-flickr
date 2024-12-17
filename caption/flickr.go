@@ -12,8 +12,8 @@ import (
 	"time"
 
 	pb_caption "github.com/aaronland/go-picturebook/caption"
+	"github.com/aaronland/go-picturebook/bucket"	
 	"github.com/tidwall/gjson"
-	"gocloud.dev/blob"	
 )
 
 func init() {
@@ -43,7 +43,7 @@ func NewFlickrCaption(ctx context.Context, uri string) (pb_caption.Caption, erro
 	return c, nil
 }
 
-func (c *FlickrCaption) Text(ctx context.Context, bucket *blob.Bucket, path string) (string, error) {
+func (c *FlickrCaption) Text(ctx context.Context, source_bucket bucket.Bucket, path string) (string, error) {
 
 	ext := filepath.Ext(path)
 
@@ -52,17 +52,19 @@ func (c *FlickrCaption) Text(ctx context.Context, bucket *blob.Bucket, path stri
 
 	info := strings.Replace(path, img_ext, info_ext, -1)
 
-	exists, err := bucket.Exists(ctx, info)
+	/*
+	exists, err := source_bucket.Exists(ctx, info)
 
 	if err != nil {
 		return "", err
 	}
-
+	
 	if !exists {
 		return "", errors.New("Missing _i.json file")
 	}
-
-	fh, err := bucket.NewReader(ctx, info, nil)
+	*/
+	
+	fh, err := source_bucket.NewReader(ctx, info, nil)
 
 	if err != nil {
 		return "", err

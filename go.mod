@@ -3,7 +3,7 @@ module github.com/aaronland/go-picturebook-flickr
 go 1.23.3
 
 require (
-	github.com/aaronland/go-picturebook v0.9.3
+	github.com/aaronland/go-picturebook v0.10.0
 	github.com/tidwall/gjson v1.18.0
 	gocloud.dev v0.40.0
 )
