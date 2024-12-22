@@ -2,24 +2,17 @@ package bucket
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"iter"
 	"log/slog"
 	"net/http"
 	"net/url"
-	// "strconv"
 	"slices"
 	"strings"
 
-	// "os"
-
-	pb_bucket "github.com/aaronland/go-picturebook/bucket"
-	// "github.com/jtacoma/uritemplates"
 	"github.com/aaronland/go-flickr-api/client"
-	"github.com/aaronland/go-flickr-api/response"
-	// "github.com/tidwall/gjson"
+	pb_bucket "github.com/aaronland/go-picturebook/bucket"
 	"github.com/whosonfirst/go-ioutil"
 )
 
@@ -40,7 +33,16 @@ func init() {
 
 func NewFlickrAPIBucket(ctx context.Context, uri string) (pb_bucket.Bucket, error) {
 
-	api_client, err := client.NewClient(ctx, uri)
+	u, err := url.Parse(uri)
+
+	if err != nil {
+		return nil, err
+	}
+
+	q := u.Query()
+	client_uri := q.Get("client_uri")
+	
+	api_client, err := client.NewClient(ctx, client_uri)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create new client, %w", err)
@@ -76,6 +78,10 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 	ok_methods := []string{
 		"flickr.galleries.getPhotos",
 		"flickr.groups.pools.getPhotos",
+		"flickr.photos.getContactsPhotos",
+		"flickr.photos.getContactsPublicPhotos",
+		"flickr.photos.getWithGeoData",
+		"flickr.photos.getWithoutGeoData",
 		"flickr.people.getPhotos",
 		"flickr.photos.search",
 		"flickr.photosets.getPhotos",
@@ -127,17 +133,28 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 				return err
 			}
 
-			var rsp *response.PhotosSearchResponse
-
-			dec := json.NewDecoder(r)
-			err = dec.Decode(&rsp)
+			rsp, err := NewFlickrPhotosResponse(args.Get("method"), r)
 
 			if err != nil {
 				yield("", err)
 				return err
 			}
 
-			for _, ph := range rsp.Photos.Photo {
+			/*
+				var rsp *PhotosSearchResponse
+
+				dec := json.NewDecoder(r)
+				err = dec.Decode(&rsp)
+
+				if err != nil {
+					yield("", err)
+					return err
+				}
+
+				for _, ph := range rsp.Photos.Photo {
+			*/
+
+			for ph := range rsp.Iterate() {
 
 				possible := []string{
 					ph.UrlO,
