@@ -56,7 +56,7 @@ func AllowedFlickrAPIMethods() []string {
 		"flickr.photos.getWithGeoData",
 		"flickr.photos.getWithoutGeoData",
 		"flickr.people.getPhotos",
-		"flickr.people.getPhotosOf",		
+		"flickr.people.getPhotosOf",
 		"flickr.photos.search",
 		"flickr.photosets.getPhotos",
 	}
@@ -109,7 +109,7 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 	logger = logger.With("uri", uri)
 
 	ok_methods := AllowedFlickrAPIMethods()
-	
+
 	return func(yield func(string, error) bool) {
 
 		args, err := url.ParseQuery(uri)
