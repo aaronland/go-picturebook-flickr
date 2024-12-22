@@ -1,6 +1,11 @@
 # github.com/MaxHalford/halfgone v0.0.0-20171017091812-482157b86ccb
 ## explicit
 github.com/MaxHalford/halfgone
+# github.com/aaronland/go-flickr-api v1.1.4
+## explicit; go 1.22.1
+github.com/aaronland/go-flickr-api/auth
+github.com/aaronland/go-flickr-api/client
+github.com/aaronland/go-flickr-api/response
 # github.com/aaronland/go-image v1.3.1
 ## explicit; go 1.22.4
 github.com/aaronland/go-image/colour
@@ -20,7 +25,7 @@ github.com/aaronland/go-image-halftone
 ## explicit; go 1.12
 github.com/aaronland/go-mimetypes
 github.com/aaronland/go-mimetypes/lookup
-# github.com/aaronland/go-picturebook v0.10.0
+# github.com/aaronland/go-picturebook v0.12.0
 ## explicit; go 1.23
 github.com/aaronland/go-picturebook
 github.com/aaronland/go-picturebook/app/picturebook
@@ -29,6 +34,7 @@ github.com/aaronland/go-picturebook/caption
 github.com/aaronland/go-picturebook/filter
 github.com/aaronland/go-picturebook/picture
 github.com/aaronland/go-picturebook/process
+github.com/aaronland/go-picturebook/progress
 github.com/aaronland/go-picturebook/sort
 github.com/aaronland/go-picturebook/tempfile
 github.com/aaronland/go-picturebook/text
@@ -101,6 +107,9 @@ github.com/googleapis/gax-go/v2/apierror
 github.com/googleapis/gax-go/v2/apierror/internal/proto
 github.com/googleapis/gax-go/v2/callctx
 github.com/googleapis/gax-go/v2/internal
+# github.com/jtacoma/uritemplates v1.0.0
+## explicit
+github.com/jtacoma/uritemplates
 # github.com/mandykoh/go-parallel v0.1.0
 ## explicit; go 1.15
 github.com/mandykoh/go-parallel
@@ -123,14 +132,23 @@ github.com/mandykoh/prism/meta/jpegmeta
 github.com/mandykoh/prism/meta/pngmeta
 github.com/mandykoh/prism/meta/webpmeta
 github.com/mandykoh/prism/srgb
+# github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db
+## explicit
+github.com/mitchellh/colorstring
 # github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 ## explicit
 github.com/nfnt/resize
+# github.com/rivo/uniseg v0.4.7
+## explicit; go 1.18
+github.com/rivo/uniseg
 # github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 ## explicit
 github.com/rwcarlsen/goexif/exif
 github.com/rwcarlsen/goexif/mknote
 github.com/rwcarlsen/goexif/tiff
+# github.com/schollz/progressbar/v3 v3.17.1
+## explicit; go 1.22
+github.com/schollz/progressbar/v3
 # github.com/sfomuseum/go-exif-update v0.1.3
 ## explicit; go 1.22.4
 github.com/sfomuseum/go-exif-update
@@ -199,10 +217,14 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/sys v0.24.0
+# golang.org/x/sys v0.27.0
 ## explicit; go 1.18
+golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
+# golang.org/x/term v0.26.0
+## explicit; go 1.18
+golang.org/x/term
 # golang.org/x/text v0.17.0
 ## explicit; go 1.18
 golang.org/x/text/secure/bidirule
