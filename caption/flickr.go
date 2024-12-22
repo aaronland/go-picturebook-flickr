@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aaronland/go-picturebook/bucket"
 	pb_caption "github.com/aaronland/go-picturebook/caption"
-	"github.com/aaronland/go-picturebook/bucket"	
 	"github.com/tidwall/gjson"
 )
 
@@ -53,17 +53,17 @@ func (c *FlickrCaption) Text(ctx context.Context, source_bucket bucket.Bucket, p
 	info := strings.Replace(path, img_ext, info_ext, -1)
 
 	/*
-	exists, err := source_bucket.Exists(ctx, info)
+		exists, err := source_bucket.Exists(ctx, info)
 
-	if err != nil {
-		return "", err
-	}
-	
-	if !exists {
-		return "", errors.New("Missing _i.json file")
-	}
+		if err != nil {
+			return "", err
+		}
+
+		if !exists {
+			return "", errors.New("Missing _i.json file")
+		}
 	*/
-	
+
 	fh, err := source_bucket.NewReader(ctx, info, nil)
 
 	if err != nil {

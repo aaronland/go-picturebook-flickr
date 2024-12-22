@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"path/filepath"
 
+	"github.com/aaronland/go-picturebook/bucket"
 	pb_filter "github.com/aaronland/go-picturebook/filter"
-	"github.com/aaronland/go-picturebook/bucket"	
 )
 
 func init() {
