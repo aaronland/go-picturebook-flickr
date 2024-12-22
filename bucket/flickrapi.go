@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	// "log/slog"
+	"log/slog"
 	"net/http"
 	"net/url"
 	// "strconv"
+	"slices"
+	"strings"
+
+	// "os"
 
 	pb_bucket "github.com/aaronland/go-picturebook/bucket"
 	// "github.com/jtacoma/uritemplates"
@@ -66,6 +70,9 @@ func (b *FlickrAPIBucket) GatherPictures(ctx context.Context, uris ...string) it
 
 func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.Seq2[string, error] {
 
+	logger := slog.Default()
+	logger = logger.With("uri", uri)
+
 	return func(yield func(string, error) bool) {
 
 		args, err := url.ParseQuery(uri)
@@ -75,7 +82,30 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 			return
 		}
 
-		args.Set("method", "flickr.photos.search")
+		with_extras := []string{
+			"url_n",
+			"url_z",
+			"url_c",
+			"url_l",
+			"url_o",
+		}
+
+		if args.Has("extras") {
+
+			extras := strings.Split(args.Get("extras"), ",")
+
+			for _, e := range with_extras {
+				if !slices.Contains(extras, e) {
+					extras = append(extras, e)
+				}
+			}
+
+			args.Set("extras", strings.Join(extras, ","))
+
+		} else {
+
+			args.Set("extras", strings.Join(with_extras, ","))
+		}
 
 		cb := func(ctx context.Context, r io.ReadSeekCloser, err error) error {
 
@@ -83,7 +113,7 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 				return err
 			}
 
-			var rsp *response.StandardPhotosResponse
+			var rsp *response.PhotosSearchResponse
 
 			dec := json.NewDecoder(r)
 			err = dec.Decode(&rsp)
@@ -93,11 +123,26 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 				return err
 			}
 
-			for _, ph := range rsp.Photos {
+			for _, ph := range rsp.Photos.Photo {
 
-				// Derive URL here...
+				possible := []string{
+					ph.UrlO,
+					ph.UrlL,
+					ph.UrlC,
+					ph.UrlZ,
+					ph.UrlN,
+				}
 
-				if !yield(ph.Title, nil) {
+				var ph_url string
+
+				for _, u := range possible {
+					if u != "" {
+						ph_url = u
+						break
+					}
+				}
+
+				if !yield(ph_url, nil) {
 					return fmt.Errorf("Yield did not return true")
 				}
 			}
