@@ -73,12 +73,25 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 	logger := slog.Default()
 	logger = logger.With("uri", uri)
 
+	ok_methods := []string{
+		"flickr.galleries.getPhotos",
+		"flickr.groups.pools.getPhotos",
+		"flickr.people.getPhotos",
+		"flickr.photos.search",
+		"flickr.photosets.getPhotos",
+	}
+
 	return func(yield func(string, error) bool) {
 
 		args, err := url.ParseQuery(uri)
 
 		if err != nil {
 			yield("", err)
+			return
+		}
+
+		if !slices.Contains(ok_methods, args.Get("method")) {
+			yield("", fmt.Errorf("Unsupported method"))
 			return
 		}
 
@@ -110,6 +123,7 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 		cb := func(ctx context.Context, r io.ReadSeekCloser, err error) error {
 
 			if err != nil {
+				logger.Error("Callback yielded an error", "error", err)
 				return err
 			}
 
@@ -161,7 +175,7 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 
 func (b *FlickrAPIBucket) NewReader(ctx context.Context, key string, opts any) (io.ReadSeekCloser, error) {
 
-	// Valid key here...
+	// Validate key here...
 
 	rsp, err := http.Get(key)
 
