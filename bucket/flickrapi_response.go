@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"iter"
+	"log/slog"
 )
 
 type FlickrPhotosResponse interface {
@@ -37,6 +38,7 @@ func NewFlickrPhotosResponse(method string, r io.ReadSeeker) (FlickrPhotosRespon
 		err := dec.Decode(&rsp)
 
 		if err != nil {
+			slog.Error("Failed to decode response for method", "method", method, "error", err)
 			return nil, err
 		}
 
@@ -50,6 +52,7 @@ func NewFlickrPhotosResponse(method string, r io.ReadSeeker) (FlickrPhotosRespon
 		err := dec.Decode(&rsp)
 
 		if err != nil {
+			slog.Error("Failed to decode response for method", "method", method, "error", err)
 			return nil, err
 		}
 

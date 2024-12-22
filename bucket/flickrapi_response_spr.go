@@ -10,10 +10,12 @@ type PhotosSearchResponse struct {
 }
 
 type StandardPhotosResponse struct {
-	Page    int      `json:"page"`
-	Pages   int      `json:"pages"`
-	PerPage int      `json:"perpage"`
-	Total   int      `json:"total"`
+	// For reasons I don't understand yet this doesn't jibe with
+	// what the Flickr API actually returns...	
+	// Page    int      `json:"page"`
+	// Pages   int      `json:"pages"`
+	// PerPage int      `json:"perpage"`
+	// Total   int      `json:"total"`
 	Photo   []*Photo `json:"photo"`
 }
 

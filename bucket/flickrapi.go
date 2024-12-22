@@ -1,5 +1,20 @@
 package bucket
 
+/*
+
+./bin/picturebook \
+	-source-uri 'flickrapi://?client_uri=oauth1%3A%2F%2F%3Fconsumer_key%3D...%26consumer_secret%3D...%26oauth_token%3D...%26oauth_token_secret%3D...'
+	-target-uri /usr/local/src/go-picturebook-flickr \
+	'method=flickr.photos.search&user_id=35034348999@N01&tags=flickrhq'
+
+./bin/picturebook \
+	-source-uri 'flickrapi://?client_uri=oauth1%3A%2F%2F%3Fconsumer_key%3D...%26consumer_secret%3D...%26oauth_token%3D...%26oauth_token_secret%3D...'
+	-target-uri /usr/local/src/go-picturebook-flickr \
+	-filename ca.pdf \
+	'method=flickr.photosets.getPhotos&user_id=35034348999@N01&photoset_id=72177720319945125'
+
+*/
+
 import (
 	"context"
 	"fmt"
@@ -31,6 +46,24 @@ func init() {
 	}
 }
 
+func AllowedFlickrAPIMethods() []string {
+
+	ok_methods := []string{
+		"flickr.galleries.getPhotos",
+		"flickr.groups.pools.getPhotos",
+		"flickr.photos.getContactsPhotos",
+		"flickr.photos.getContactsPublicPhotos",
+		"flickr.photos.getWithGeoData",
+		"flickr.photos.getWithoutGeoData",
+		"flickr.people.getPhotos",
+		"flickr.people.getPhotosOf",		
+		"flickr.photos.search",
+		"flickr.photosets.getPhotos",
+	}
+
+	return ok_methods
+}
+
 func NewFlickrAPIBucket(ctx context.Context, uri string) (pb_bucket.Bucket, error) {
 
 	u, err := url.Parse(uri)
@@ -41,7 +74,7 @@ func NewFlickrAPIBucket(ctx context.Context, uri string) (pb_bucket.Bucket, erro
 
 	q := u.Query()
 	client_uri := q.Get("client_uri")
-	
+
 	api_client, err := client.NewClient(ctx, client_uri)
 
 	if err != nil {
@@ -75,18 +108,8 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 	logger := slog.Default()
 	logger = logger.With("uri", uri)
 
-	ok_methods := []string{
-		"flickr.galleries.getPhotos",
-		"flickr.groups.pools.getPhotos",
-		"flickr.photos.getContactsPhotos",
-		"flickr.photos.getContactsPublicPhotos",
-		"flickr.photos.getWithGeoData",
-		"flickr.photos.getWithoutGeoData",
-		"flickr.people.getPhotos",
-		"flickr.photos.search",
-		"flickr.photosets.getPhotos",
-	}
-
+	ok_methods := AllowedFlickrAPIMethods()
+	
 	return func(yield func(string, error) bool) {
 
 		args, err := url.ParseQuery(uri)
@@ -139,20 +162,6 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 				yield("", err)
 				return err
 			}
-
-			/*
-				var rsp *PhotosSearchResponse
-
-				dec := json.NewDecoder(r)
-				err = dec.Decode(&rsp)
-
-				if err != nil {
-					yield("", err)
-					return err
-				}
-
-				for _, ph := range rsp.Photos.Photo {
-			*/
 
 			for ph := range rsp.Iterate() {
 

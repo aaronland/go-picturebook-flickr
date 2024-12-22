@@ -4,12 +4,12 @@ import (
 	"context"
 	"log"
 
+	_ "github.com/aaronland/go-picturebook-flickr/bucket"
 	_ "github.com/aaronland/go-picturebook-flickr/caption"
 	_ "github.com/aaronland/go-picturebook-flickr/filter"
-	_ "github.com/aaronland/go-picturebook-flickr/bucket"	
 	_ "gocloud.dev/blob/fileblob"
 
-	"github.com/aaronland/go-picturebook/app/picturebook"	
+	"github.com/aaronland/go-picturebook/app/picturebook"
 )
 
 func main() {
