@@ -4,7 +4,7 @@ go 1.23.3
 
 require (
 	github.com/aaronland/go-flickr-api v1.1.4
-	github.com/aaronland/go-picturebook v0.13.0
+	github.com/aaronland/go-picturebook v0.14.0
 	github.com/tidwall/gjson v1.18.0
 	github.com/whosonfirst/go-ioutil v1.0.2
 	gocloud.dev v0.40.0
