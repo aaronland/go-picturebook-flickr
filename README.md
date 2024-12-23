@@ -161,7 +161,27 @@ This handler will derive the title for a Flickr photo using data stored in a `{P
 
 #### flickrapi://
 
-This does not exist yet but it will soon.
+This handler will derive the caption for an image using the [flickr.photos.getInfo]() Flickr API method. Captions will be formated as:
+
+"{TITLE}" (or "untitled")
+{PHOTOGRAPHER REALNAME} ({PHOTOGRAPHER_USERNAME})
+{PHOTO DATE TAKEN YYYY-MM-DD}
+
+For example, given the Flickr photo [https://live.staticflickr.com/8124/8659998886_aea0810d40_o_d.jpg](https://flickr.com/photos/straup/8659998886) the derived caption would be::
+
+```
+(untitled)
+Aaron Straup Cope (straup)
+2013-04-17
+```
+
+The convention for Flickr API "caption" URIs is:
+
+```
+"flickr://?client_uri=" + {GO_FLICKR_API_CLIENT_URI}
+```
+
+Where "{GO_FLICKR_API_CLIENT_URI}" is a valid [aaronland/go-flickr-api](https://github.com/aaronland/go-flickr-api) client URI. As of this writing the need to define the entirety of that client URI as a URL-escape strings is a tiresome chore which will be simplified in time.
 
 ### Filters
 

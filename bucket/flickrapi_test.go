@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"testing"
+	"net/url"
 )
 
 var client_uri = flag.String("flickr-client-uri", "", "...")
@@ -22,7 +23,14 @@ func TestFlickrAPIBucket(t *testing.T) {
 
 	ctx := context.Background()
 
-	b, err := NewFlickrAPIBucket(ctx, *client_uri)
+	bucket_q := url.Values{}
+	bucket_q.Set("client_uri", *client_uri)
+
+	bucket_u := url.URL{}
+	bucket_u.Scheme = "flickrapi"
+	bucket_u.RawQuery = bucket_q.Encode()
+	
+	b, err := NewFlickrAPIBucket(ctx, bucket_u.String())
 
 	if err != nil {
 		t.Fatalf("Failed to create bucket, %v", err)
