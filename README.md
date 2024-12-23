@@ -111,6 +111,7 @@ This handler will gather photos to include in a picturebook from the Flickr API 
 * [flickr.groups.pools.getPhotos](https://www.flickr.com/services/api/flickr.groups.pools.getPhotos.html)
 * [flickr.photos.getContactsPhotos](https://www.flickr.com/services/api/flickr.photos.getContactsPhotos.html)
 * [flickr.photos.getContactsPublicPhotos](https://www.flickr.com/services/api/flickr.photos.getContactsPublicPhotos.html)
+* [flickr.photos.getFavorites](https://www.flickr.com/services/api/flickr.photos.getFavorites.html)
 * [flickr.photos.getWithGeoData](https://www.flickr.com/services/api/flickr.photos.getWithGeoData.html)
 * [flickr.photos.getWithoutGeoData](https://www.flickr.com/services/api/flickr.photos.getWithoutGeoData.html)
 * [flickr.people.getPhotos](https://www.flickr.com/services/api/flickr.people.getPhotos.html)
@@ -151,7 +152,7 @@ Rather than passing one or more paths on the local disk to crawl for file to add
 method=flickr.photos.search&user_id=35034348999@N01&tags=flickrhq
 ```
 
-The `flickrapi://` handler works but should still be considered experimental.
+The `flickrapi://` bucket handler works but should still be considered experimental.
 
 ### Captions
 
@@ -161,7 +162,29 @@ This handler will derive the title for a Flickr photo using data stored in a `{P
 
 #### flickrapi://
 
-This does not exist yet but it will soon.
+This handler will derive the caption for an image using the [flickr.photos.getInfo]() Flickr API method. Captions will be formated as:
+
+"{TITLE}" (or "untitled")
+{PHOTOGRAPHER REALNAME} ({PHOTOGRAPHER_USERNAME})
+{PHOTO DATE TAKEN YYYY-MM-DD}
+
+For example, given the Flickr photo [https://live.staticflickr.com/8124/8659998886_aea0810d40_o_d.jpg](https://flickr.com/photos/straup/8659998886) the derived caption would be::
+
+```
+(untitled)
+Aaron Straup Cope (straup)
+2013-04-17
+```
+
+The convention for Flickr API "caption" URIs is:
+
+```
+"flickr://?client_uri=" + {GO_FLICKR_API_CLIENT_URI}
+```
+
+Where "{GO_FLICKR_API_CLIENT_URI}" is a valid [aaronland/go-flickr-api](https://github.com/aaronland/go-flickr-api) client URI. As of this writing the need to define the entirety of that client URI as a URL-escape strings is a tiresome chore which will be simplified in time.
+
+The `flickrapi://` caption handler works but should still be considered experimental.
 
 ### Filters
 
