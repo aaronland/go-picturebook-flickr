@@ -53,6 +53,7 @@ func AllowedFlickrAPIMethods() []string {
 		"flickr.groups.pools.getPhotos",
 		"flickr.photos.getContactsPhotos",
 		"flickr.photos.getContactsPublicPhotos",
+		"flickr.photos.getFavorites",
 		"flickr.photos.getWithGeoData",
 		"flickr.photos.getWithoutGeoData",
 		"flickr.people.getPhotos",
