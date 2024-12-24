@@ -107,11 +107,11 @@ In addition to the default `picturebook` handlers this package exports the follo
 
 This handler will gather photos to include in a picturebook from the Flickr API using any of the following Flickr API methods:
 
+* [flickr.favorites.getList](https://www.flickr.com/services/api/flickr.favorites.getList.html)
 * [flickr.galleries.getPhotos](https://www.flickr.com/services/api/flickr.galleries.getPhotos.html)
 * [flickr.groups.pools.getPhotos](https://www.flickr.com/services/api/flickr.groups.pools.getPhotos.html)
 * [flickr.photos.getContactsPhotos](https://www.flickr.com/services/api/flickr.photos.getContactsPhotos.html)
 * [flickr.photos.getContactsPublicPhotos](https://www.flickr.com/services/api/flickr.photos.getContactsPublicPhotos.html)
-* [flickr.photos.getFavorites](https://www.flickr.com/services/api/flickr.photos.getFavorites.html)
 * [flickr.photos.getWithGeoData](https://www.flickr.com/services/api/flickr.photos.getWithGeoData.html)
 * [flickr.photos.getWithoutGeoData](https://www.flickr.com/services/api/flickr.photos.getWithoutGeoData.html)
 * [flickr.people.getPhotos](https://www.flickr.com/services/api/flickr.people.getPhotos.html)

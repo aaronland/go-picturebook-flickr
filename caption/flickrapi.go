@@ -13,6 +13,7 @@ import (
 	pb_caption "github.com/aaronland/go-picturebook/caption"
 )
 
+// FlickrAPICaption implements the `aaronland/go-picturebook/caption.Caption` interface for photos returned by the Flickr API.
 type FlickrAPICaption struct {
 	pb_caption.Caption
 	api_client client.Client
@@ -28,6 +29,7 @@ func init() {
 	}
 }
 
+// NewFlickrAPICaption returns a new `FlickrAPICaption` instance implementing the `aaronland/go-picturebook/caption.Caption` interface for use with photos returned by the Flickr API.
 func NewFlickrAPICaption(ctx context.Context, uri string) (pb_caption.Caption, error) {
 
 	u, err := url.Parse(uri)
@@ -52,6 +54,7 @@ func NewFlickrAPICaption(ctx context.Context, uri string) (pb_caption.Caption, e
 	return b, nil
 }
 
+// Text returns the caption text for object image identified by 'key' in 'b'.
 func (c *FlickrAPICaption) Text(ctx context.Context, b pb_bucket.Bucket, key string) (string, error) {
 
 	base := filepath.Base(key)

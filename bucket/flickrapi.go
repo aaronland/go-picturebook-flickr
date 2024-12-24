@@ -31,6 +31,7 @@ import (
 	"github.com/whosonfirst/go-ioutil"
 )
 
+// FlickrAPIBucket implements the `aaronland/go-picturebook/bucket.Bucket` interface for photos returned by the Flickr API.
 type FlickrAPIBucket struct {
 	pb_bucket.Bucket
 	api_client client.Client
@@ -46,14 +47,15 @@ func init() {
 	}
 }
 
+// AllowedFlickrAPIMethods returns the list of Flickr API methods supported by this package.
 func AllowedFlickrAPIMethods() []string {
 
 	ok_methods := []string{
+		"flickr.favorites.getList",
 		"flickr.galleries.getPhotos",
 		"flickr.groups.pools.getPhotos",
 		"flickr.photos.getContactsPhotos",
 		"flickr.photos.getContactsPublicPhotos",
-		"flickr.photos.getFavorites",
 		"flickr.photos.getWithGeoData",
 		"flickr.photos.getWithoutGeoData",
 		"flickr.people.getPhotos",
@@ -65,6 +67,7 @@ func AllowedFlickrAPIMethods() []string {
 	return ok_methods
 }
 
+// NewFlickrAPIBucket returns a new `FlickrAPIBucket` instance implementing the `aaronland/go-picturebook/bucket.Bucket` interface for use with photos returned by the Flickr API.
 func NewFlickrAPIBucket(ctx context.Context, uri string) (pb_bucket.Bucket, error) {
 
 	u, err := url.Parse(uri)
@@ -89,6 +92,7 @@ func NewFlickrAPIBucket(ctx context.Context, uri string) (pb_bucket.Bucket, erro
 	return b, nil
 }
 
+// GatherPictures returns a new `iter.Seq2[string, error]` instance containing the URIs for a collection of Flickr API results matching the queries in 'uris'.
 func (b *FlickrAPIBucket) GatherPictures(ctx context.Context, uris ...string) iter.Seq2[string, error] {
 
 	return func(yield func(string, error) bool) {
@@ -194,12 +198,13 @@ func (b *FlickrAPIBucket) gatherPictures(ctx context.Context, uri string) iter.S
 		err = client.ExecuteMethodPaginatedWithClient(ctx, b.api_client, &args, cb)
 
 		if err != nil {
-			yield("", err)
+			yield("", fmt.Errorf("Failed to execute paginated method, %w", err))
 			return
 		}
 	}
 }
 
+// NewReader returns a new `io.ReadSeekCloser` instance for an Flickr photo identified by 'key'.
 func (b *FlickrAPIBucket) NewReader(ctx context.Context, key string, opts any) (io.ReadSeekCloser, error) {
 
 	// Validate key here...
@@ -217,18 +222,22 @@ func (b *FlickrAPIBucket) NewReader(ctx context.Context, key string, opts any) (
 	return ioutil.NewReadSeekCloser(rsp.Body)
 }
 
+// NewWriter returns an error because this package only implements non-destructive methods of the `aaronland/go-picturebook/bucket.Bucket` interface.
 func (b *FlickrAPIBucket) NewWriter(ctx context.Context, key string, opts any) (io.WriteCloser, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
+// Delete returns an error because this package only implements non-destructive methods of the `aaronland/go-picturebook/bucket.Bucket` interface.
 func (b *FlickrAPIBucket) Delete(ctx context.Context, key string) error {
 	return fmt.Errorf("Not implemented")
 }
 
+// Attribute returns a new `aaronland/go-picturebook/bucket.Attributes` instance for an object image identified by 'key'.
 func (b *FlickrAPIBucket) Attributes(ctx context.Context, key string) (*pb_bucket.Attributes, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
+// Close completes and terminates any underlying code used by 'b'.
 func (b *FlickrAPIBucket) Close() error {
 	return nil
 }
